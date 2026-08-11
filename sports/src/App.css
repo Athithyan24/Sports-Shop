@@ -1,0 +1,23 @@
+/* src/index.css */
+@import "tailwindcss";
+
+@theme {
+  /* Fonts */
+  --font-sans: "Inter", sans-serif;
+
+  /* Brand Colors */
+  --color-brand-white: #ffffff;
+  --color-brand-light: #fafafa;
+  --color-brand-card: #f3f4f6;
+  --color-brand-textMain: #111827;
+  --color-brand-textMuted: #6b7280;
+  --color-brand-border: #e5e7eb;
+}
+
+/* Optional: Set default background and text colors for the whole app */
+@layer base {
+  body {
+    background-color: var(--color-brand-white);
+    color: var(--color-brand-textMain);
+  }
+}
