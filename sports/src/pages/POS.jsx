@@ -6,7 +6,11 @@ import {
 } from 'lucide-react';
 import api from '../utils/api';
 
-const BACKEND_URL = 'http://localhost:5000';
+// Dynamic host resolution matching api.js base URL
+const BACKEND_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
+  : `http://${window.location.hostname}:5000`;
+
 const spring = { type: 'spring', stiffness: 350, damping: 30 };
 
 const getImageUrl = (url) => {
@@ -98,7 +102,6 @@ export default function POS() {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    // Search exact SKU match
     const exactMatch = products.find(
       (p) => p.sku?.toLowerCase() === searchQuery.trim().toLowerCase()
     );
@@ -118,7 +121,7 @@ export default function POS() {
       prevCart
         .map((item) => {
           if (item._id === id) {
-            const availableStock = item.quantity ?? item.stock ?? 999;
+            const availableStock = item.quantity ?? item.stock ?? 0;
             const newQty = item.qty + delta;
 
             if (newQty > availableStock) {
@@ -154,7 +157,7 @@ export default function POS() {
         _id: item._id,
         name: item.name,
         sku: item.sku,
-        price: item.price ?? item.sellingPrice,
+        price: (item.price ?? item.sellingPrice ?? 0) * (1 - (Number(discountPercent) || 0) / 100), // Ensures backend invoice reflects net discounted price
         qty: item.qty
       })),
       customer: { name: customerName, phone: customerPhone },
@@ -168,8 +171,14 @@ export default function POS() {
     try {
       const res = await api.post('/billing/checkout', orderPayload);
       
-      // Store returned order for print preview receipt
-      setCompletedOrder(res.data.order || { ...orderPayload, invoiceId: `INV-${Date.now().toString().slice(-6)}`, createdAt: new Date() });
+      // Fixed: Matches `res.data.invoice` returned by billingRoutes.js
+      const savedInvoice = res.data.invoice;
+
+      setCompletedOrder({
+        ...orderPayload,
+        invoiceId: savedInvoice?._id || `INV-${Date.now().toString().slice(-6)}`,
+        createdAt: savedInvoice?.date || new Date()
+      });
       
       // Reset POS state
       setCart([]);
@@ -498,7 +507,7 @@ export default function POS() {
                   <CheckCircle2 size={28} />
                 </div>
                 <h3 className="text-xl font-bold text-neutral-900">Payment Successful</h3>
-                <p className="text-xs text-neutral-400 font-mono">Order ID: {completedOrder.invoiceId || completedOrder._id}</p>
+                <p className="text-xs text-neutral-400 font-mono">Order ID: {completedOrder.invoiceId}</p>
               </div>
 
               {/* Printable Invoice Slip Container */}
@@ -519,13 +528,16 @@ export default function POS() {
                   {completedOrder.cart?.map((item, i) => (
                     <div key={i} className="flex justify-between">
                       <span className="truncate max-w-[180px]">{item.qty}x {item.name}</span>
-                      <span>₹{(item.price * item.qty).toFixed(2)}</span>
+                      <span>₹{((item.price ?? 0) * item.qty).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="border-t border-black/10 pt-2 space-y-1 text-right">
                   <p>Subtotal: ₹{completedOrder.subtotal?.toFixed(2)}</p>
+                  {completedOrder.discount > 0 && (
+                    <p className="text-emerald-600">Discount: -₹{completedOrder.discount?.toFixed(2)}</p>
+                  )}
                   <p>Tax (8%): ₹{completedOrder.tax?.toFixed(2)}</p>
                   <p className="font-bold text-sm text-black">Total Paid: ₹{completedOrder.total?.toFixed(2)}</p>
                   <p className="text-[10px] text-neutral-400 uppercase">Paid via {completedOrder.paymentMethod}</p>

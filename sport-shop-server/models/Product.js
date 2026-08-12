@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const variantSchema = new mongoose.Schema({
   color: { type: String, required: true }, // e.g., "Golden"
   size: { type: String, required: true },  // e.g., "L"
-  sku: { type: String },                   // e.g., "CRIC-TSHIRT-GOLD-L"
+  sku: { type: String },
+  attributes: { type: Map, of: String }, // e.g., { "Size": "M", "Color": "Red" }
+  quantity: { type: Number, required: true, default: 0 },                   // e.g., "CRIC-TSHIRT-GOLD-L"
   stock: { type: Number, default: 0 },     // e.g., 30
   price: { type: Number },                 // Optional variant price override
   sizeChartUrl: { type: String }           // Optional custom size chart image for this specific variant/color

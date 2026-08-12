@@ -18,28 +18,23 @@ import {
   ImagePlus,
   Check,
   Palette,
-  Wand2,
-  FileText,
-  Tags
+  Wand2
 } from 'lucide-react';
 
 import { 
   MdSportsBasketball, MdSportsSoccer, MdSportsCricket, MdSportsTennis, 
-  MdSportsVolleyball, MdSportsBaseball, MdSportsMartialArts, MdPool, 
-  MdDirectionsBike, MdDirectionsRun, MdSportsGolf, MdSportsFootball, 
-  MdSportsRugby, MdSportsHockey, MdSportsGymnastics, MdSportsEsports, 
-  MdSnowboarding, MdSurfing, MdSkateboarding, MdRowing, MdCheckroom 
+  MdSportsGymnastics 
 } from 'react-icons/md';
 
 import { 
-  FaTableTennis, FaBowlingBall, FaChess 
+  FaTableTennis, FaChess 
 } from 'react-icons/fa';
 
 import { PiPants, PiTShirt } from 'react-icons/pi';
 import { 
   GiBoxingGlove, 
-  GiArcheryTarget, GiShuttlecock, 
-  GiEightBall, GiHelmet , GiSocks, GiRunningShoe
+  GiShuttlecock, 
+  GiEightBall, GiRunningShoe
 } from 'react-icons/gi';
 
 import api from '../utils/api';
@@ -65,28 +60,7 @@ const HARDCODED_CATEGORIES = [
         fields: [{ fieldName: 'Player Level', options: ['Beginner', 'Intermediate', 'Professional'] }],
         productTypes: [
           { typeName: 'Bat', fields: [{ fieldName: 'Willow Type', options: ['English Willow Grade 1', 'English Willow Grade 2', 'English Willow Grade 3', 'Kashmir Willow', 'Alternative Wood'] }, { fieldName: 'Weight Range', options: ['Light (1050-1100g)', 'Medium (1100-1150g)', 'Heavy (1150g+)'] }, { fieldName: 'Size', options: ['Short Handle (SH)', 'Long Handle (LH)', 'Harrow', 'Size 6', 'Size 5', 'Size 4'] }, { fieldName: 'Sweet Spot', options: ['Low', 'Mid', 'High'] }] },
-          { typeName: 'Ball', fields: [{ fieldName: 'Core Material', options: ['Cork', 'Rubber', 'Synthetic'] }, { fieldName: 'Outer Material', options: ['Alum Tanned Leather', 'PU', 'Tennis/Felt'] }, { fieldName: 'Color', options: ['Red', 'White', 'Pink', 'Yellow'] }, { fieldName: 'Weight', options: ['156g (Senior)', '142g (Junior)'] }, { fieldName: 'Seam', options: ['Hand Stitched', 'Machine Stitched'] }] },
-          { typeName: 'Helmet', fields: [{ fieldName: 'Size', options: ['Small', 'Medium', 'Large', 'Extra Large'] }, { fieldName: 'Grille Material', options: ['Titanium', 'Stainless Steel', 'Mild Steel'] }, { fieldName: 'Color', options: ['Navy', 'Blue', 'Green', 'Maroon', 'Black'] }] },
-          { typeName: 'Pads / Guards', fields: [{ fieldName: 'Type', options: ['Batting Pads', 'Wicket Keeping Pads', 'Thigh Guard', 'Arm Guard', 'Chest Guard'] }, { fieldName: 'Size', options: ['Mens', 'Youth', 'Boys'] }, { fieldName: 'Facing Material', options: ['PU', 'PVC', 'Canvas'] }] },
-          { typeName: 'Gloves', fields: [{ fieldName: 'Type', options: ['Batting Gloves', 'Wicket Keeping Gloves', 'Inner Gloves'] }, { fieldName: 'Dexterity', options: ['Right Hand', 'Left Hand'] }, { fieldName: 'Protection Profile', options: ['Sausage Fingers', 'Split Fingers'] }] }
-        ]
-      },
-      {
-        gameName: 'Football / Soccer',
-        fields: [],
-        productTypes: [
-          { typeName: 'Ball', fields: [{ fieldName: 'Size', options: ['Size 5 (Adult)', 'Size 4 (Youth)', 'Size 3 (Junior)', 'Size 1 (Mini)'] }, { fieldName: 'Type', options: ['Match Pro', 'Training', 'Futsal', 'Street'] }, { fieldName: 'Panel Construction', options: ['Thermo-bonded', 'Hand-stitched', 'Machine-stitched'] }, { fieldName: 'Color', options: ['White', 'Yellow', 'Orange', 'Neon Green'] }] },
-          { typeName: 'Shin Guards', fields: [{ fieldName: 'Size', options: ['S', 'M', 'L'] }, { fieldName: 'Style', options: ['Slip-in', 'Ankle Guard Attached'] }, { fieldName: 'Material', options: ['Carbon Fiber', 'Polypropylene', 'Foam'] }] },
-          { typeName: 'Goalkeeper Gloves', fields: [{ fieldName: 'Size', options: ['7', '8', '9', '10', '11'] }, { fieldName: 'Cut Type', options: ['Flat Palm', 'Roll Finger', 'Negative Cut'] }, { fieldName: 'Finger Spines', options: ['Removable', 'Fixed', 'None'] }] }
-        ]
-      },
-      {
-        gameName: 'Tennis',
-        fields: [],
-        productTypes: [
-          { typeName: 'Racquet', fields: [{ fieldName: 'Grip Size', options: ['4', '4 1/8', '4 1/4', '4 3/8', '4 1/2'] }, { fieldName: 'Head Size', options: ['Midsize (85-95 sq in)', 'Midplus (96-105 sq in)', 'Oversize (106+ sq in)'] }, { fieldName: 'String Tension', options: ['Unstrung', 'Factory Strung', 'Custom Tension'] }] },
-          { typeName: 'Ball', fields: [{ fieldName: 'Court Type', options: ['All Court', 'Clay Court', 'Hard Court', 'Grass'] }, { fieldName: 'Pressurization', options: ['Pressurized', 'Pressureless'] }, { fieldName: 'Color', options: ['Neon Green', 'Yellow', 'Pink'] }] },
-          { typeName: 'Accessories', fields: [{ fieldName: 'Type', options: ['Overgrip', 'Vibration Dampener', 'Sweatband'] }, { fieldName: 'Color', options: ['White', 'Black', 'Blue', 'Red', 'Neon Green'] }] }
+          { typeName: 'Ball', fields: [{ fieldName: 'Core Material', options: ['Cork', 'Rubber', 'Synthetic'] }, { fieldName: 'Outer Material', options: ['Alum Tanned Leather', 'PU', 'Tennis/Felt'] }, { fieldName: 'Color', options: ['Red', 'White', 'Pink', 'Yellow'], allowMultiple: true }] }
         ]
       }
     ]
@@ -103,101 +77,26 @@ const HARDCODED_CATEGORIES = [
         gameName: 'Activewear / Gym',
         fields: [{ fieldName: 'Fabric Technology', options: ['Moisture Wicking', 'Thermal / Fleece', 'UV Protection', 'Anti-Odor', 'Standard'] }],
         productTypes: [
-          { typeName: 'T-Shirt / Top', fields: [{ fieldName: 'Size', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] }, { fieldName: 'Fit', options: ['Compression', 'Slim', 'Regular', 'Loose/Relaxed'] }, { fieldName: 'Neckline', options: ['Crew Neck', 'V-Neck', 'Henley', 'Polo'] }, { fieldName: 'Color', options: ['Black', 'White', 'Grey', 'Navy', 'Red', 'Blue'] }] },
-          { typeName: 'Shorts', fields: [{ fieldName: 'Size', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] }, { fieldName: 'Inseam', options: ['3 inch', '5 inch', '7 inch', '9 inch'] }, { fieldName: 'Lining', options: ['Built-in Brief', 'Compression Liner', 'Unlined'] }, { fieldName: 'Color', options: ['Black', 'Navy', 'Grey', 'Red'] }] },
-          { typeName: 'Leggings / Trackpants', fields: [{ fieldName: 'Size', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] }, { fieldName: 'Length', options: ['Full Length', '7/8 Length', '3/4 Capris', 'Short'] }, { fieldName: 'Waistband', options: ['High Rise', 'Mid Rise', 'Low Rise'] }, { fieldName: 'Color', options: ['Black', 'Grey', 'Navy', 'Maroon'] }] }
-        ]
-      },
-      {
-        gameName: 'Team Jerseys',
-        fields: [],
-        productTypes: [
-          { typeName: 'Jersey', fields: [{ fieldName: 'Sport', options: ['Football', 'Basketball', 'Cricket', 'Rugby', 'Hockey'] }, { fieldName: 'Size', options: ['S', 'M', 'L', 'XL', 'XXL'] }, { fieldName: 'Sleeve', options: ['Sleeveless', 'Short Sleeve', 'Long Sleeve'] }, { fieldName: 'Authenticity', options: ['Authentic / Match', 'Replica / Fan', 'Training'] }, { fieldName: 'Color', options: ['Red', 'Blue', 'White', 'Black', 'Yellow', 'Green'] }] }
-        ]
-      }
-    ]
-  },
-  {
-    _id: 'cat_3',
-    mainCategory: 'Footwear',
-    fields: [
-      { fieldName: 'Gender', options: ['Men', 'Women', 'Unisex', 'Kids'] },
-      { fieldName: 'Shoe Size (US)', options: ['4', '5', '6', '7', '8', '8.5', '9', '9.5', '10', '10.5', '11', '12', '13', '14'] },
-      { fieldName: 'Width', options: ['Standard (D)', 'Wide (EE)', 'Extra Wide (4E)', 'Narrow (B)'] }
-    ],
-    games: [
-      {
-        gameName: 'Running & Training',
-        fields: [],
-        productTypes: [
-          { typeName: 'Running Shoes', fields: [{ fieldName: 'Cushioning Level', options: ['Maximum', 'Moderate', 'Minimal', 'Barefoot/Zero Drop'] }, { fieldName: 'Pronation Support', options: ['Neutral', 'Stability', 'Motion Control'] }, { fieldName: 'Surface', options: ['Road', 'Trail', 'Track'] }, { fieldName: 'Color', options: ['Black', 'White', 'Grey', 'Neon Green', 'Blue', 'Red'] }] },
-          { typeName: 'Weightlifting Shoes', fields: [{ fieldName: 'Heel Height', options: ['0.5 inch', '0.75 inch', '1 inch'] }, { fieldName: 'Closure', options: ['Laces Only', 'Laces + Single Strap', 'Laces + Double Strap', 'BOA System'] }, { fieldName: 'Color', options: ['Black', 'White', 'Red'] }] }
-        ]
-      },
-      {
-        gameName: 'Football / Soccer',
-        fields: [],
-        productTypes: [
-          { typeName: 'Cleats / Studs', fields: [{ fieldName: 'Surface Type', options: ['Firm Ground (FG)', 'Soft Ground (SG)', 'Artificial Grass (AG)', 'Turf (TF)', 'Indoor (IN)'] }, { fieldName: 'Ankle Collar', options: ['Low Cut', 'Mid Cut / Sock', 'High Cut'] }, { fieldName: 'Upper Material', options: ['Synthetic', 'K-Leather', 'Calf Leather', 'Knit'] }, { fieldName: 'Color', options: ['Black', 'White', 'Neon Green', 'Pink', 'Cyan'] }] }
-        ]
-      },
-      {
-        gameName: 'Court Sports',
-        fields: [],
-        productTypes: [
-          { typeName: 'Court Shoes', fields: [{ fieldName: 'Sport', options: ['Tennis', 'Badminton', 'Squash', 'Volleyball'] }, { fieldName: 'Sole Type', options: ['Non-Marking Gum Rubber', 'All Court', 'Clay Court Herringbone'] }, { fieldName: 'Color', options: ['White', 'Navy', 'Black', 'Red'] }] }
-        ]
-      }
-    ]
-  },
-  {
-    _id: 'cat_4',
-    mainCategory: 'Gym & Fitness',
-    fields: [],
-    games: [
-      {
-        gameName: 'Strength Training',
-        fields: [],
-        productTypes: [
-          { typeName: 'Dumbbells', fields: [{ fieldName: 'Material', options: ['Cast Iron', 'Rubber Coated Hex', 'Urethane', 'Neoprene / Vinyl'] }, { fieldName: 'Weight', options: ['1kg', '2kg', '5kg', '10kg', '12.5kg', '15kg', '20kg', '25kg', '30kg+'] }, { fieldName: 'Handle Grip', options: ['Ergonomic / Contoured', 'Straight Knurled'] }, { fieldName: 'Color', options: ['Black', 'Silver', 'Blue', 'Pink', 'Red'] }] },
-          { typeName: 'Barbells', fields: [{ fieldName: 'Type', options: ['Olympic Bar (2")', 'Standard Bar (1")', 'EZ Curl Bar', 'Trap/Hex Bar', 'Swiss Bar'] }, { fieldName: 'Length', options: ['4ft', '5ft', '6ft', '7ft'] }, { fieldName: 'Coating', options: ['Bare Steel', 'Black Zinc', 'Chrome', 'Cerakote'] }] },
-          { typeName: 'Weight Plates', fields: [{ fieldName: 'Type', options: ['Bumper Plate (Rubber)', 'Cast Iron Plate', 'Tri-Grip Rubber Coated', 'Fractional Plate'] }, { fieldName: 'Hole Diameter', options: ['Olympic (2 inch)', 'Standard (1 inch)'] }, { fieldName: 'Weight', options: ['1.25kg', '2.5kg', '5kg', '10kg', '15kg', '20kg', '25kg'] }, { fieldName: 'Color', options: ['Black', 'Red', 'Blue', 'Yellow', 'Green'] }] }
-        ]
-      },
-      {
-        gameName: 'Yoga & Pilates',
-        fields: [],
-        productTypes: [
-          { typeName: 'Yoga Mat', fields: [{ fieldName: 'Thickness', options: ['3mm (Travel)', '4-5mm (Standard)', '6mm (Extra Cushion)', '10mm+ (Thick)'] }, { fieldName: 'Material', options: ['PVC', 'TPE (Eco-Friendly)', 'Natural Rubber', 'Cork', 'Cotton/Jute'] }, { fieldName: 'Color', options: ['Purple', 'Blue', 'Pink', 'Green', 'Black', 'Grey'] }] },
-          { typeName: 'Accessories', fields: [{ fieldName: 'Type', options: ['Yoga Block', 'Resistance Band', 'Foam Roller', 'Yoga Strap', 'Pilates Ring'] }, { fieldName: 'Color', options: ['Pink', 'Purple', 'Blue', 'Black'] }] }
-        ]
-      }
-    ]
-  },
-  {
-    _id: 'cat_5',
-    mainCategory: 'Trophies & Awards',
-    fields: [],
-    games: [
-      {
-        gameName: 'Trophies & Cups',
-        fields: [],
-        productTypes: [
-          { typeName: 'Cup Trophy', fields: [{ fieldName: 'Material', options: ['Metal', 'Fibre / Resin', 'Crystal / Glass', 'Wood Base'] }, { fieldName: 'Size Height', options: ['Small (6"-10")', 'Medium (10"-15")', 'Large (15"-24")', 'Championship (24"+)'] }, { fieldName: 'Color', options: ['Gold', 'Silver', 'Bronze'] }] },
-          { typeName: 'Figurine Award', fields: [{ fieldName: 'Sport Theme', options: ['Football Player', 'Cricket Batsman', 'Basketball', 'Star / Victory', 'Academic'] }, { fieldName: 'Color', options: ['Gold', 'Silver', 'Bronze'] }] }
-        ]
-      },
-      {
-        gameName: 'Medals & Plaques',
-        fields: [],
-        productTypes: [
-          { typeName: 'Medals', fields: [{ fieldName: 'Finish / Color', options: ['Gold', 'Silver', 'Bronze', 'Antique Finish', 'Set of 3 (G/S/B)'] }, { fieldName: 'Diameter', options: ['40mm', '50mm', '60mm', '70mm+'] }, { fieldName: 'Ribbon Type', options: ['Tricolor (National)', 'Solid Red', 'Solid Blue', 'Custom Lanyard'] }] },
-          { typeName: 'Plaques / Shields', fields: [{ fieldName: 'Material', options: ['Mahogany Wood', 'Rosewood Finish', 'Glass/Acrylic', 'Metal Frame'] }, { fieldName: 'Orientation', options: ['Portrait', 'Landscape', 'Shield Shape'] }] }
+          { typeName: 'T-Shirt / Top', fields: [{ fieldName: 'Size', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], allowMultiple: true }, { fieldName: 'Fit', options: ['Compression', 'Slim', 'Regular', 'Loose/Relaxed'] }, { fieldName: 'Color', options: ['Black', 'White', 'Grey', 'Navy', 'Red', 'Blue'], allowMultiple: true }] }
         ]
       }
     ]
   }
 ];
+
+// Helper to generate combinations of array attributes
+const generateVariantMatrix = (attrs) => {
+  const keys = Object.keys(attrs).filter(k => Array.isArray(attrs[k]) && attrs[k].length > 0);
+  if (keys.length === 0) return [];
+  
+  const combinations = keys.reduce((acc, key) => {
+    const values = attrs[key];
+    if (acc.length === 0) return values.map(val => ({ [key]: val }));
+    return acc.flatMap(obj => values.map(val => ({ ...obj, [key]: val })));
+  }, []);
+  
+  return combinations;
+};
 
 export default function AddProduct() {
   const [loading, setLoading] = useState(false);
@@ -211,7 +110,10 @@ export default function AddProduct() {
   const [selectedMainId, setSelectedMainId] = useState('');
   const [selectedGame, setSelectedGame] = useState('');
   const [selectedType, setSelectedType] = useState('');
+  
+  // Dynamic Attributes & Variant State
   const [dynamicValues, setDynamicValues] = useState({});
+  const [variants, setVariants] = useState([]);
 
   // Form Data
   const [formData, setFormData] = useState({
@@ -238,6 +140,12 @@ export default function AddProduct() {
     fetchCategories();
   }, []);
 
+  // Regenerate variant matrix whenever dynamic multi-select values change
+  useEffect(() => {
+    const newVariants = generateVariantMatrix(dynamicValues);
+    setVariants(newVariants.map(v => ({ attributes: v, quantity: 0, sku: '' })));
+  }, [dynamicValues]);
+
   const activeMain = categories.find(c => c._id === selectedMainId);
   const activeGame = activeMain?.games?.find(g => g.gameName === selectedGame);
   const activeType = activeGame?.productTypes?.find(p => p.typeName === selectedType);
@@ -255,6 +163,7 @@ export default function AddProduct() {
     setSelectedGame('');
     setSelectedType('');
     setDynamicValues({});
+    setVariants([]);
   };
 
   const jumpToStep = (targetStep) => {
@@ -303,7 +212,14 @@ export default function AddProduct() {
       const updatedArr = currentArr.includes(opt)
         ? currentArr.filter(item => item !== opt)
         : [...currentArr, opt];
-      setDynamicValues({ ...dynamicValues, [fieldName]: updatedArr });
+      
+      const newDynamicValues = { ...dynamicValues };
+      if (updatedArr.length > 0) {
+        newDynamicValues[fieldName] = updatedArr;
+      } else {
+        delete newDynamicValues[fieldName];
+      }
+      setDynamicValues(newDynamicValues);
     } else {
       setDynamicValues({ ...dynamicValues, [fieldName]: opt });
     }
@@ -324,14 +240,20 @@ export default function AddProduct() {
       payload.append('price', Number(formData.price));
       payload.append('compareAtPrice', formData.compareAtPrice ? Number(formData.compareAtPrice) : '');
       payload.append('costPrice', Number(formData.costPrice));
-      payload.append('quantity', Number(formData.quantity));
-      payload.append('supplier', formData.supplier || '');
       
+      // Calculate total quantity from variants if applicable, else use base quantity
+      const totalVariantQty = variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
+      const finalQuantity = variants.length > 0 ? totalVariantQty : Number(formData.quantity);
+      payload.append('quantity', finalQuantity);
+      
+      payload.append('supplier', formData.supplier || '');
       payload.append('mainCategory', activeMain?.mainCategory || '');
       payload.append('gameType', selectedGame || '');
       payload.append('productType', selectedType || '');
       
+      // Append Attributes and Variants Array
       payload.append('attributes', JSON.stringify(dynamicValues));
+      payload.append('variants', JSON.stringify(variants));
 
       if (imageFile) {
         payload.append('image', imageFile);
@@ -351,6 +273,7 @@ export default function AddProduct() {
         quantity: '', supplier: '', description: '', tags: '', imageUrl: '' 
       });
       setDynamicValues({});
+      setVariants([]);
       setImageFile(null);
       setImagePreview(null);
       
@@ -748,10 +671,13 @@ export default function AddProduct() {
                 <div className="space-y-4 pt-4 border-t border-neutral-100">
                   <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-widest ml-1">Inventory & Pricing</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-neutral-400 uppercase tracking-widest mb-3 ml-1">Stock Quantity *</label>
-                      <input required type="number" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} className="w-full bg-neutral-50/50 border border-neutral-200 rounded-2xl px-5 py-4 text-neutral-900 placeholder:text-neutral-300 focus:bg-white focus:border-neutral-900 focus:ring-4 focus:ring-neutral-900/5 outline-none transition-all duration-300 ease-out" placeholder="0" />
-                    </div>
+                    {/* Only show top-level quantity if there are NO variants */}
+                    {variants.length === 0 && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-neutral-400 uppercase tracking-widest mb-3 ml-1">Stock Quantity *</label>
+                        <input required type="number" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} className="w-full bg-neutral-50/50 border border-neutral-200 rounded-2xl px-5 py-4 text-neutral-900 placeholder:text-neutral-300 focus:bg-white focus:border-neutral-900 focus:ring-4 focus:ring-neutral-900/5 outline-none transition-all duration-300 ease-out" placeholder="0" />
+                      </div>
+                    )}
                     <div>
                       <label className="block text-[11px] font-semibold text-neutral-400 uppercase tracking-widest mb-3 ml-1">Cost Price *</label>
                       <input required type="number" step="0.01" value={formData.costPrice} onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })} className="w-full bg-neutral-50/50 border border-neutral-200 rounded-2xl px-5 py-4 text-neutral-900 placeholder:text-neutral-300 focus:bg-white focus:border-neutral-900 focus:ring-4 focus:ring-neutral-900/5 outline-none transition-all duration-300 ease-out" placeholder="0.00" />
@@ -766,6 +692,35 @@ export default function AddProduct() {
                     </div>
                   </div>
                 </div>
+
+                {/* VARIANT QUANTITIES */}
+                {variants.length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-neutral-100 animate-in fade-in slide-in-from-bottom-2 duration-500 ease-out">
+                    <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-widest ml-1">Variant Quantities</h3>
+                    <p className="text-[11px] text-neutral-500 ml-1 -mt-2 mb-4">Set specific stock for each combination. (Total stock will automatically sync).</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {variants.map((variant, index) => (
+                        <div key={index} className="flex items-center gap-4 p-4 bg-neutral-50/50 border border-neutral-200 rounded-2xl">
+                          <span className="flex-1 font-medium text-sm text-neutral-700">
+                            {Object.entries(variant.attributes).map(([k, v]) => `${v}`).join(' / ')}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Qty"
+                            value={variant.quantity === 0 ? '' : variant.quantity}
+                            className="w-24 px-4 py-3 bg-white border border-neutral-200 rounded-xl text-neutral-900 focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/5 outline-none transition-all duration-300"
+                            onChange={(e) => {
+                              const newV = [...variants];
+                              newV[index].quantity = Number(e.target.value);
+                              setVariants(newV);
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* SUBMIT SECTION */}
                 <div className="pt-10 flex flex-col-reverse sm:flex-row justify-between items-center gap-6 border-t border-neutral-100">

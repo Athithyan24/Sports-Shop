@@ -107,8 +107,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     const productId = req.params.id;
     const updateData = { ...req.body };
 
-    // If attributes are sent as a string, parse them for the Mongoose Map
-    if (updateData.attributes) {
+    // Only attempt JSON.parse if attributes is passed as a String (e.g. via FormData)
+    if (updateData.attributes && typeof updateData.attributes === 'string') {
       try {
         updateData.attributes = JSON.parse(updateData.attributes);
       } catch (parseError) {
