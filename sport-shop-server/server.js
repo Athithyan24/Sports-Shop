@@ -8,6 +8,9 @@ const productRoutes = require('./routes/productRoutes');
 const billingRoutes = require('./routes/billingRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const authRoutes = require('./routes/authRoutes');
+
+const seedAdmin = require('./seedAdmin');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,7 +21,7 @@ app.use(express.json());
 
 // Database Connection
 mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/sport-shop')
-  .then(() => console.log('Connected to MongoDB successfully.'))
+  .then(() => {console.log('Connected to MongoDB successfully.'); seedAdmin(); })
   .catch((err) => console.error('MongoDB connection error:', err));
 
 // Basic Health Check Route
@@ -33,6 +36,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use('/api/products', productRoutes);
+app.use('/api/auth', authRoutes);
 
 // We will import your specific routes (like billing and dashboard) here later.
 

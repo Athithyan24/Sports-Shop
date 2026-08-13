@@ -6,7 +6,7 @@ import {
 import { 
   TrendingUp, AlertTriangle, Loader2, Calendar, CreditCard, Banknote, 
   QrCode, User, Receipt, Search, Filter, X, MousePointerClick, PlusCircle, 
-  ArrowDownRight, ArrowUpRight, Wallet, CheckCircle2, Tag, Layers
+  ArrowDownRight, ArrowUpRight, Wallet, CheckCircle2, Tag, Layers, Clock
 } from 'lucide-react';
 import api from '../utils/api';
 
@@ -23,6 +23,19 @@ const containerVariants = {
 const cardVariants = {
   hidden: { opacity: 0, y: 14, scale: 0.98 },
   show: { opacity: 1, y: 0, scale: 1, transition: springTransition }
+};
+
+// Helper function to check if ISO Date is Today
+const isToday = (dateStr) => {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  return (
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  );
 };
 
 // Helper function to extract variant info from item name string e.g. "Shoes (Red, XL)"
@@ -54,7 +67,7 @@ const getTransactionLabel = (txDate, currentPeriod) => {
   return '';
 };
 
-// Dynamically generate 100% mathematically synchronized chart data from raw transactions & expenses
+// Dynamically generate synchronized chart data from raw transactions & expenses
 const generateSynchronizedChartData = (transactions = [], expenses = [], timeframe = 'weekly', backendChart = []) => {
   let labels = [];
   if (timeframe === 'weekly') {
@@ -106,12 +119,41 @@ export default function Dashboard() {
     totalExpenses: 0,
     totalCashIn: 0,
     netRevenue: 0,
+    todaySales: 0,
+    todayCashIn: 0,
+    todayExpenses: 0,
     activeCategories: 0,
     lowStockCount: 0,
     lowStockWarnings: [],
     chartData: [],
     transactions: [],
     expenses: []
+  });
+
+  // Detect user role with better fallback logic
+  const [userRole, setUserRole] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      const storedRole = localStorage.getItem('role');
+      let currentRole = 'worker';
+
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed.role) {
+          currentRole = parsed.role;
+        }
+      }
+      
+      // Fallback to storedRole if user object didn't have it
+      if (currentRole === 'worker' && storedRole) {
+        currentRole = storedRole;
+      }
+      
+      return currentRole.toLowerCase();
+    } catch (e) {
+      console.error("Failed to parse user role", e);
+      return 'worker';
+    }
   });
 
   const [timeframe, setTimeframe] = useState('weekly');
@@ -128,6 +170,9 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'sales' | 'expenses' | 'cash_in'
 
+  // BUG FIX: More inclusive admin check to handle roles like "System Admin"
+  const isAdmin = userRole === 'admin' || userRole.includes('admin');
+
   useEffect(() => {
     setSelectedBar(null);
     fetchDashboardStats(timeframe);
@@ -142,7 +187,7 @@ export default function Dashboard() {
       const rawExpenses = response.data.expenses || [];
       const backendChart = response.data.chartData || [];
 
-      // Generate 100% synchronized chart data matching cards
+      // Generate synchronized chart data
       const computedChartData = generateSynchronizedChartData(
         rawTransactions, 
         rawExpenses, 
@@ -150,17 +195,25 @@ export default function Dashboard() {
         backendChart
       );
 
-      // Card Totals
+      // Card Timeframe Totals
       const calculatedSales = rawTransactions.reduce((sum, t) => sum + Number(t.total || 0), 0);
       const calculatedCashIn = rawExpenses.filter(e => e.type === 'cash_in').reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const calculatedExpenses = rawExpenses.filter(e => e.type === 'expense').reduce((sum, e) => sum + Number(e.amount || 0), 0);
       const calculatedNet = calculatedSales + calculatedCashIn - calculatedExpenses;
+
+      // Calculate Today's figures explicitly
+      const tSales = rawTransactions.filter(t => isToday(t.date)).reduce((sum, t) => sum + Number(t.total || 0), 0);
+      const tCashIn = rawExpenses.filter(e => e.type === 'cash_in' && isToday(e.date)).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const tExpenses = rawExpenses.filter(e => e.type === 'expense' && isToday(e.date)).reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       setStats({
         grossSales: response.data.grossSales ?? calculatedSales,
         totalExpenses: response.data.totalExpenses ?? calculatedExpenses,
         totalCashIn: response.data.totalCashIn ?? calculatedCashIn,
         netRevenue: response.data.netRevenue ?? calculatedNet,
+        todaySales: tSales,
+        todayCashIn: tCashIn,
+        todayExpenses: tExpenses,
         activeCategories: response.data.activeCategories || 0,
         lowStockCount: response.data.lowStockCount || response.data.lowStockWarnings?.length || 0,
         lowStockWarnings: response.data.lowStockWarnings || [],
@@ -199,13 +252,23 @@ export default function Dashboard() {
     }
   };
 
+  const handleOpenModal = (type = 'expense') => {
+    setFormType(type);
+    setIsModalOpen(true);
+  };
+
   const handleBarClick = (data) => {
     if (!data || (!data.activeLabel && !data.label)) return;
     const clickedLabel = data.activeLabel || data.label;
     setSelectedBar((prev) => (prev === clickedLabel ? null : clickedLabel));
   };
 
-  // Filter Sales Transactions for Selected Bar & Search Term
+  // ----------------------------------------------------------------------
+  // FILTERING LOGIC:
+  // Admin: Filters by Chart Selection (selectedBar) + Search Term
+  // Worker: Always filters by Today + Search Term (since they have no chart)
+  // ----------------------------------------------------------------------
+  
   const filteredTransactions = stats.transactions.filter((tx) => {
     const q = searchFilter.toLowerCase();
     const matchesSearch = 
@@ -216,23 +279,30 @@ export default function Dashboard() {
         (item.sku && item.sku.toLowerCase().includes(q))
       );
 
-    const txLabel = getTransactionLabel(tx.date, timeframe);
-    const matchesBar = selectedBar ? txLabel === selectedBar : true;
-
-    return matchesSearch && matchesBar;
+    if (isAdmin) {
+      const txLabel = getTransactionLabel(tx.date, timeframe);
+      return matchesSearch && (selectedBar ? txLabel === selectedBar : true);
+    } else {
+      return matchesSearch && isToday(tx.date);
+    }
   });
 
-  // Filter Expenses / Cash-In for Selected Bar & Search Term
   const filteredExpenses = stats.expenses.filter((exp) => {
     const q = searchFilter.toLowerCase();
     const matchesSearch = exp.reason.toLowerCase().includes(q);
-    const expLabel = getTransactionLabel(exp.date, timeframe);
-    const matchesBar = selectedBar ? expLabel === selectedBar : true;
 
-    return matchesSearch && matchesBar;
+    if (isAdmin) {
+      const expLabel = getTransactionLabel(exp.date, timeframe);
+      return matchesSearch && (selectedBar ? expLabel === selectedBar : true);
+    } else {
+      return matchesSearch && isToday(exp.date);
+    }
   });
 
-  // Day Summaries for Audit Ledger
+  // Derived Values for Ledger Header
+  const showLedger = isAdmin ? !!selectedBar : true;
+  const ledgerTitle = isAdmin ? selectedBar : "Today";
+  
   const selectedDaySales = filteredTransactions.reduce((acc, t) => acc + t.total, 0);
   const selectedDayCashIn = filteredExpenses.filter(e => e.type === 'cash_in').reduce((acc, e) => acc + e.amount, 0);
   const selectedDayExpenses = filteredExpenses.filter(e => e.type === 'expense').reduce((acc, e) => acc + e.amount, 0);
@@ -293,28 +363,61 @@ export default function Dashboard() {
       initial="hidden"
       animate="show"
       variants={containerVariants}
-      className="flex flex-col gap-8 max-w-7xl mx-auto w-full pb-16 font-sans antialiased text-neutral-900 select-none"
+      className="flex flex-col gap-6 max-w-7xl mx-auto w-full pb-16 font-sans antialiased text-neutral-900 select-none"
     >
       
-      {/* HEADER BAR & CASH FLOW ACTION */}
+      {/* HEADER BAR WITH ROLE-SPECIFIC ACTION BUTTONS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Financial & Inventory Dashboard</h1>
-          <p className="text-xs text-neutral-400 mt-0.5">Real-time revenue telemetry, variant level stock warnings, and transaction audit ledger</p>
+          <h1 className="text-2xl font-light tracking-tight text-neutral-900">
+            {isAdmin ? "Financial & Inventory Dashboard" : "Point of Sale Cash Terminal"}
+          </h1>
+          <p className="text-xs text-neutral-400 mt-0.5">
+            {isAdmin 
+              ? "Real-time revenue telemetry, variant level stock warnings, and transaction audit ledger" 
+              : "Quick daily cash flow log and expense record terminal"}
+          </p>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 bg-neutral-900 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-black/10 hover:bg-black transition-all"
-        >
-          <PlusCircle size={16} />
-          <span>Record Expense / Cash In</span>
-        </motion.button>
+        {/* ROLE-BASED ACTION BUTTONS */}
+        {isAdmin ? (
+          /* Admin Login: Combined Record Expense / Cash In Button */
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleOpenModal('expense')}
+            className="inline-flex items-center gap-2 bg-neutral-900 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-black/10 hover:bg-black transition-all"
+          >
+            <PlusCircle size={16} />
+            <span>Record Expense / Cash In</span>
+          </motion.button>
+        ) : (
+          /* Worker Login: 2 Individual Quick Buttons */
+          <div className="flex items-center gap-2.5">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleOpenModal('expense')}
+              className="inline-flex items-center gap-2 bg-rose-600 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-rose-600/20 hover:bg-rose-700 transition-all"
+            >
+              <ArrowDownRight size={16} />
+              <span>Record Expense</span>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleOpenModal('cash_in')}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
+            >
+              <ArrowUpRight size={16} />
+              <span>Record Cash In</span>
+            </motion.button>
+          </div>
+        )}
       </div>
 
-      {/* 1. TOP FINANCIAL & INVENTORY SUMMARY CARDS (5 CARDS) */}
+      {/* 1. TOP 5 OVERALL SUMMARY CARDS (DISPLAYED FOR ALL ROLES) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
         {/* Card 1: Net Balance */}
@@ -406,149 +509,214 @@ export default function Dashboard() {
 
       </div>
 
-      {/* 2. REVENUE ANALYTICS CHART (SINGLE STACKED BAR) */}
-      <motion.div 
-        variants={cardVariants}
-        className="bg-white/90 backdrop-blur-2xl p-7 rounded-[28px] border border-black/[0.06] shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/[0.05] pb-5">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h3 className="text-lg font-semibold tracking-tight text-neutral-900">Net Revenue Breakdown</h3>
+      {/* 2. DEDICATED TODAY'S REAL-TIME SUMMARY (3 INDIVIDUAL CARDS) */}
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-2 pl-1">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+          <h2 className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Today's Real-Time Summary</h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          
+          {/* Today's Sales Card */}
+          <motion.div 
+            variants={cardVariants}
+            whileHover={{ y: -3, transition: { duration: 0.2 } }}
+            className="bg-gradient-to-br from-white to-neutral-50/50 p-5 rounded-[22px] border border-emerald-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Clock size={13} className="text-emerald-600" />
+                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Today's Sales</p>
+              </div>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Live</span>
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-neutral-900">
+              ₹{stats.todaySales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </h3>
+          </motion.div>
+
+          {/* Today's Cash In Card */}
+          <motion.div 
+            variants={cardVariants}
+            whileHover={{ y: -3, transition: { duration: 0.2 } }}
+            className="bg-gradient-to-br from-white to-blue-50/30 p-5 rounded-[22px] border border-blue-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Clock size={13} className="text-blue-600" />
+                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Today's Cash In</p>
+              </div>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Live</span>
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-blue-600">
+              ₹{stats.todayCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </h3>
+          </motion.div>
+
+          {/* Today's Expenses Card */}
+          <motion.div 
+            variants={cardVariants}
+            whileHover={{ y: -3, transition: { duration: 0.2 } }}
+            className="bg-gradient-to-br from-white to-rose-50/30 p-5 rounded-[22px] border border-rose-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Clock size={13} className="text-rose-600" />
+                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Today's Expenses</p>
+              </div>
+              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">Live</span>
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-rose-600">
+              ₹{stats.todayExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </h3>
+          </motion.div>
+
+        </div>
+      </div>
+
+      {/* 3. ADMIN-ONLY REVENUE ANALYTICS CHART (SINGLE STACKED BAR) */}
+      {isAdmin && (
+        <motion.div 
+          variants={cardVariants}
+          className="bg-white/90 backdrop-blur-2xl p-7 rounded-[28px] border border-black/[0.06] shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6 mt-2"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/[0.05] pb-5">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-lg font-semibold tracking-tight text-neutral-900">Net Revenue Breakdown</h3>
+                <AnimatePresence>
+                  {selectedBar && (
+                    <motion.span 
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="bg-black text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm"
+                    >
+                      <Filter size={10} /> Active Filter: {selectedBar}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+              <p className="text-xs text-neutral-400 mt-0.5">Stacked view of Gross Sales (Ash), Cash In (Blue), and Expenses (Red)</p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Color Legend */}
+              <div className="hidden md:flex items-center gap-3 text-[11px] font-medium text-neutral-600 bg-neutral-100/60 px-3 py-1.5 rounded-full border border-black/3">
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600" /> Sales (Ash)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#007AFF]" /> Cash In
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Expenses
+                </span>
+              </div>
+
               <AnimatePresence>
                 {selectedBar && (
-                  <motion.span 
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="bg-black text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm"
+                  <motion.button
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setSelectedBar(null)}
+                    className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1.5 bg-rose-50/80 px-3.5 py-1.5 rounded-full border border-rose-100 transition-colors shadow-sm"
                   >
-                    <Filter size={10} /> Active Filter: {selectedBar}
-                  </motion.span>
+                    <X size={13} /> Reset
+                  </motion.button>
                 )}
               </AnimatePresence>
-            </div>
-            <p className="text-xs text-neutral-400 mt-0.5">Stacked view of Gross Sales (Ash), Cash In (Blue), and Expenses (Red)</p>
-          </div>
 
-          <div className="flex items-center gap-4">
-            {/* Color Legend */}
-            <div className="hidden md:flex items-center gap-3 text-[11px] font-medium text-neutral-600 bg-neutral-100/60 px-3 py-1.5 rounded-full border border-black/[0.04]">
-              <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-zinc-500" /> Sales (Ash)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Cash In
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Expenses
-              </span>
-            </div>
-
-            <AnimatePresence>
-              {selectedBar && (
-                <motion.button
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setSelectedBar(null)}
-                  className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1.5 bg-rose-50/80 px-3.5 py-1.5 rounded-full border border-rose-100 transition-colors shadow-sm"
+              <div className="flex items-center gap-2 bg-neutral-100/70 px-3.5 py-1.5 rounded-full border border-black/[0.04] shadow-inner">
+                <Calendar size={15} className="text-neutral-400" />
+                <select
+                  value={timeframe}
+                  onChange={(e) => setTimeframe(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-neutral-800 outline-none cursor-pointer pr-1"
                 >
-                  <X size={13} /> Reset
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            <div className="flex items-center gap-2 bg-neutral-100/70 px-3.5 py-1.5 rounded-full border border-black/[0.04] shadow-inner">
-              <Calendar size={15} className="text-neutral-400" />
-              <select
-                value={timeframe}
-                onChange={(e) => setTimeframe(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-neutral-800 outline-none cursor-pointer pr-1"
-              >
-                <option value="weekly">Weekly View</option>
-                <option value="monthly">Monthly View</option>
-                <option value="yearly">Yearly View</option>
-              </select>
+                  <option value="weekly">Weekly View</option>
+                  <option value="monthly">Monthly View</option>
+                  <option value="yearly">Yearly View</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Chart Canvas with Clean Selection (No browser outline ring) */}
-        <div className="h-[360px] w-full relative [&_*]:outline-none [&_.recharts-surface]:outline-none">
-          {loading && (
-            <div className="absolute inset-0 bg-white/60 backdrop-blur-md flex items-center justify-center text-neutral-400 gap-2 z-10 rounded-2xl">
-              <Loader2 className="animate-spin text-neutral-800" size={20} />
-              <span className="text-xs font-medium text-neutral-700">Updating analytics...</span>
-            </div>
-          )}
+          {/* Chart Canvas */}
+          <div className="h-90 w-full relative **:outline-none [&_.recharts-surface]:outline-none">
+            {loading && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-md flex items-center justify-center text-neutral-400 gap-2 z-10 rounded-2xl">
+                <Loader2 className="animate-spin text-neutral-800" size={20} />
+                <span className="text-xs font-medium text-neutral-700">Updating analytics...</span>
+              </div>
+            )}
 
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
-              data={stats.chartData} 
-              onClick={handleBarClick}
-              accessibilityLayer={false}
-              margin={{ top: 15, right: 10, left: 10, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F2" />
-              <XAxis 
-                dataKey="label" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#A3A3A3', fontSize: 11, fontWeight: 500 }} 
-                dy={10} 
-              />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#A3A3A3', fontSize: 11, fontWeight: 500 }} 
-                tickFormatter={(val) => `₹${val}`} 
-                dx={-10} 
-              />
-              <Tooltip 
-                cursor={{ fill: 'rgba(0, 0, 0, 0.03)', radius: 12 }}
-                content={<CustomStackedTooltip />}
-              />
-              
-              {/* Stacked Single Bar Components */}
-              {/* 1. Gross Sales Segment (Ash / Light Charcoal) */}
-              <Bar 
-                dataKey="sales" 
-                stackId="singleBar" 
-                fill="#71717A" 
-                maxBarSize={44}
-                animationDuration={800}
-                style={{ cursor: 'pointer' }}
-              />
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={stats.chartData} 
+                onClick={handleBarClick}
+                accessibilityLayer={false}
+                margin={{ top: 15, right: 10, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F2" />
+                <XAxis 
+                  dataKey="label" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#A3A3A3', fontSize: 11, fontWeight: 500 }} 
+                  dy={10} 
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#A3A3A3', fontSize: 11, fontWeight: 500 }} 
+                  tickFormatter={(val) => `₹${val}`} 
+                  dx={-10} 
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(0, 0, 0, 0.03)', radius: 12 }}
+                  content={<CustomStackedTooltip />}
+                />
+                
+                {/* Stacked Single Bar Components */}
+                <Bar 
+                  dataKey="sales" 
+                  stackId="singleBar" 
+                  fill="#475569" 
+                  maxBarSize={44}
+                  animationDuration={800}
+                  style={{ cursor: 'pointer' }}
+                />
 
-              {/* 2. Cash In Segment (Soft Accent Blue) */}
-              <Bar 
-                dataKey="cashIn" 
-                stackId="singleBar" 
-                fill="#3B82F6" 
-                maxBarSize={44}
-                animationDuration={800}
-                style={{ cursor: 'pointer' }}
-              />
+                <Bar 
+                  dataKey="cashIn" 
+                  stackId="singleBar" 
+                  fill="#007AFF" 
+                  maxBarSize={44}
+                  animationDuration={800}
+                  style={{ cursor: 'pointer' }}
+                />
 
-              {/* 3. Expenses Segment (Muted Crimson / Red) */}
-              <Bar 
-                dataKey="expenses" 
-                stackId="singleBar" 
-                fill="#F43F5E" 
-                radius={[6, 6, 0, 0]}
-                maxBarSize={44}
-                animationDuration={800}
-                style={{ cursor: 'pointer' }}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </motion.div>
+                <Bar 
+                  dataKey="expenses" 
+                  stackId="singleBar" 
+                  fill="#F43F5E" 
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={44}
+                  animationDuration={800}
+                  style={{ cursor: 'pointer' }}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
 
-      {/* 3. LOW STOCK & VARIANT WARNINGS PANEL */}
+      {/* 4. LOW STOCK & VARIANT WARNINGS PANEL */}
       {stats.lowStockWarnings && stats.lowStockWarnings.length > 0 && (
         <motion.div 
           variants={cardVariants}
@@ -605,9 +773,9 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* 4. CONDITIONAL DRILL-DOWN AUDIT LEDGER */}
+      {/* 5. CONDITIONAL / ROLE-BASED DRILL-DOWN AUDIT LEDGER */}
       <AnimatePresence mode="wait">
-        {selectedBar ? (
+        {showLedger ? (
           <motion.div
             key="audit-details"
             initial={{ opacity: 0, height: 0, y: 20 }}
@@ -624,9 +792,11 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold tracking-tight text-neutral-900">Audit Ledger</h3>
+                    <h3 className="text-lg font-semibold tracking-tight text-neutral-900">
+                      {isAdmin ? "Audit Ledger" : "Today's Transaction Ledger"}
+                    </h3>
                     <span className="bg-black text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                      {selectedBar}
+                      {ledgerTitle}
                     </span>
                   </div>
                   <p className="text-xs text-neutral-400">
@@ -720,7 +890,7 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {activeTab === 'all' && <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider pt-2">Customer Order Receipts</h4>}
                 {filteredTransactions.length === 0 ? (
-                  <div className="py-8 text-center text-neutral-400 text-xs">No sales receipts found for {selectedBar}</div>
+                  <div className="py-8 text-center text-neutral-400 text-xs">No sales receipts found for {ledgerTitle}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -797,29 +967,31 @@ export default function Dashboard() {
 
           </motion.div>
         ) : (
-          <motion.div
-            key="empty-callout"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="bg-neutral-50/50 backdrop-blur-md rounded-[24px] border border-dashed border-neutral-200/80 p-8 text-center flex flex-col items-center justify-center gap-3 text-neutral-400"
-          >
-            <motion.div 
-              animate={{ y: [0, -5, 0] }} 
-              transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-              className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-neutral-800 border border-black/[0.05]"
+          isAdmin && (
+            <motion.div
+              key="empty-callout"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="bg-neutral-50/50 backdrop-blur-md rounded-[24px] border border-dashed border-neutral-200/80 p-8 text-center flex flex-col items-center justify-center gap-3 text-neutral-400"
             >
-              <MousePointerClick size={20} />
+              <motion.div 
+                animate={{ y: [0, -5, 0] }} 
+                transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+                className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-neutral-800 border border-black/[0.05]"
+              >
+                <MousePointerClick size={20} />
+              </motion.div>
+              <div>
+                <p className="text-xs font-semibold text-neutral-800">Select a Chart Bar</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">Click any stacked bar in the chart above to inspect detailed order receipts and cash flows.</p>
+              </div>
             </motion.div>
-            <div>
-              <p className="text-xs font-semibold text-neutral-800">Select a Chart Bar</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">Click any stacked bar in the chart above to inspect detailed order receipts and cash flows.</p>
-            </div>
-          </motion.div>
+          )
         )}
       </AnimatePresence>
 
-      {/* 5. EXPENSE & CASH IN ACTION MODAL */}
+      {/* 6. EXPENSE & CASH IN ACTION MODAL */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
