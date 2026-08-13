@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, 
-  Loader2, Printer, CheckCircle2, User, Percent, ShoppingBag, X, Package 
+  Loader2, Printer, CheckCircle2, User, Percent, ShoppingBag, X, Package, Tag
 } from 'lucide-react';
 import api from '../utils/api';
 
@@ -33,12 +33,16 @@ export default function POS() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   
-  // Completed Transaction State for Receipt Modal
+  // Completed Transaction State
   const [completedOrder, setCompletedOrder] = useState(null);
+
+  // Variant Selection State
+  const [activeProduct, setActiveProduct] = useState(null);
+  const [selectedColor, setSelectedColor] = useState('');
+  const [selectedSize, setSelectedSize] = useState('');
 
   const searchInputRef = useRef(null);
 
-  // Fetch initial catalog
   useEffect(() => {
     fetchCatalog();
   }, []);
@@ -55,13 +59,11 @@ export default function POS() {
     }
   };
 
-  // Extract Categories
   const categories = useMemo(() => {
     const set = new Set(products.map((p) => p.mainCategory || 'Uncategorized'));
     return ['All', ...Array.from(set)];
   }, [products]);
 
-  // Filter products by category or search term
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchesCat = selectedCategory === 'All' || p.mainCategory === selectedCategory;
@@ -74,10 +76,75 @@ export default function POS() {
     });
   }, [products, selectedCategory, searchQuery]);
 
-  // Add Product to Cart
+  // Handles adding standard products OR resolving variant selections
+  const handleProductClick = (product) => {
+    if (product.variants && product.variants.length > 0) {
+      setActiveProduct(product);
+      
+      // Auto-select the first available color that has stock
+      const availableColors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
+      const defaultColor = availableColors.find(c => 
+        product.variants.some(v => v.color === c && (v.quantity > 0 || v.stock > 0))
+      ) || availableColors[0] || '';
+      
+      setSelectedColor(defaultColor);
+      setSelectedSize(''); // Reset size so user is forced to pick
+    } else {
+      addToCart(product);
+    }
+  };
+
+  const addVariantToCart = () => {
+    if (!selectedColor || !selectedSize) return;
+
+    const variantMatch = activeProduct.variants.find(
+      v => v.color === selectedColor && v.size === selectedSize
+    );
+
+    if (!variantMatch) return;
+
+    const variantAvailable = variantMatch.quantity ?? variantMatch.stock ?? 0;
+    if (variantAvailable < 1) {
+      alert('Selected variant is out of stock!');
+      return;
+    }
+
+    const price = variantMatch.price || activeProduct.price || activeProduct.sellingPrice || 0;
+    const sku = variantMatch.sku || activeProduct.sku;
+    
+    // Unique cart ID so different sizes of the same product don't merge
+    const cartId = `${activeProduct._id}-${variantMatch._id || selectedSize + selectedColor}`;
+
+    const existingIndex = cart.findIndex((item) => item.cartId === cartId);
+
+    if (existingIndex > -1) {
+      const currentQty = cart[existingIndex].qty;
+      if (currentQty + 1 > variantAvailable) {
+        alert(`Stock limit reached! Only ${variantAvailable} units available for this variant.`);
+        return;
+      }
+      const updatedCart = [...cart];
+      updatedCart[existingIndex].qty += 1;
+      setCart(updatedCart);
+    } else {
+      setCart([...cart, { 
+        ...activeProduct, 
+        cartId, 
+        price, 
+        sku, 
+        qty: 1,
+        variantDetails: { color: selectedColor, size: selectedSize, id: variantMatch._id },
+        maxStock: variantAvailable
+      }]);
+    }
+
+    setActiveProduct(null);
+  };
+
   const addToCart = (product) => {
     const availableStock = product.quantity ?? product.stock ?? 0;
-    const existingIndex = cart.findIndex((item) => item._id === product._id);
+    const cartId = product._id;
+    const existingIndex = cart.findIndex((item) => item.cartId === cartId);
 
     if (existingIndex > -1) {
       const currentQty = cart[existingIndex].qty;
@@ -93,11 +160,15 @@ export default function POS() {
         alert('Item is currently out of stock!');
         return;
       }
-      setCart([...cart, { ...product, qty: 1 }]);
+      setCart([...cart, { 
+        ...product, 
+        cartId, 
+        qty: 1, 
+        maxStock: availableStock 
+      }]);
     }
   };
 
-  // Handle Barcode Scan / SKU Enter key
   const handleBarcodeSubmit = (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -107,25 +178,22 @@ export default function POS() {
     );
 
     if (exactMatch) {
-      addToCart(exactMatch);
+      handleProductClick(exactMatch);
       setSearchQuery('');
     } else if (filteredProducts.length === 1) {
-      addToCart(filteredProducts[0]);
+      handleProductClick(filteredProducts[0]);
       setSearchQuery('');
     }
   };
 
-  // Cart Quantity Controls
-  const updateQuantity = (id, delta) => {
+  const updateQuantity = (cartId, delta) => {
     setCart((prevCart) =>
       prevCart
         .map((item) => {
-          if (item._id === id) {
-            const availableStock = item.quantity ?? item.stock ?? 0;
+          if (item.cartId === cartId) {
             const newQty = item.qty + delta;
-
-            if (newQty > availableStock) {
-              alert(`Maximum stock reached (${availableStock})`);
+            if (newQty > item.maxStock) {
+              alert(`Maximum stock reached (${item.maxStock})`);
               return item;
             }
             return newQty > 0 ? { ...item, qty: newQty } : null;
@@ -136,28 +204,27 @@ export default function POS() {
     );
   };
 
-  const removeFromCart = (id) => {
-    setCart((prev) => prev.filter((item) => item._id !== id));
+  const removeFromCart = (cartId) => {
+    setCart((prev) => prev.filter((item) => item.cartId !== cartId));
   };
 
-  // Calculations
   const subtotal = cart.reduce((sum, item) => sum + ((item.price ?? item.sellingPrice ?? 0) * item.qty), 0);
   const discountAmount = (subtotal * (Number(discountPercent) || 0)) / 100;
   const taxableAmount = subtotal - discountAmount;
-  const tax = taxableAmount * 0.08; // 8% Tax
+  const tax = taxableAmount * 0.08; 
   const grandTotal = taxableAmount + tax;
 
-  // Checkout Handler
   const handleCheckout = async () => {
     if (cart.length === 0) return alert('Cart is empty!');
     setLoading(true);
 
     const orderPayload = {
       cart: cart.map((item) => ({
-        _id: item._id,
-        name: item.name,
+        _id: item._id, // the parent product ID
+        variantId: item.variantDetails?.id, // passed for backend to deduct specifically if needed
+        name: item.variantDetails ? `${item.name} (${item.variantDetails.color}, ${item.variantDetails.size})` : item.name,
         sku: item.sku,
-        price: (item.price ?? item.sellingPrice ?? 0) * (1 - (Number(discountPercent) || 0) / 100), // Ensures backend invoice reflects net discounted price
+        price: (item.price ?? item.sellingPrice ?? 0) * (1 - (Number(discountPercent) || 0) / 100),
         qty: item.qty
       })),
       customer: { name: customerName, phone: customerPhone },
@@ -170,8 +237,6 @@ export default function POS() {
 
     try {
       const res = await api.post('/billing/checkout', orderPayload);
-      
-      // Fixed: Matches `res.data.invoice` returned by billingRoutes.js
       const savedInvoice = res.data.invoice;
 
       setCompletedOrder({
@@ -180,12 +245,11 @@ export default function POS() {
         createdAt: savedInvoice?.date || new Date()
       });
       
-      // Reset POS state
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
       setDiscountPercent(0);
-      fetchCatalog(); // Refresh backend inventory counts
+      fetchCatalog(); 
     } catch (error) {
       alert(error.response?.data?.message || 'Checkout failed. Please try again.');
     } finally {
@@ -193,10 +257,13 @@ export default function POS() {
     }
   };
 
+  // Helper arrays for variant modal
+  const uniqueColors = activeProduct ? [...new Set(activeProduct.variants.map(v => v.color).filter(Boolean))] : [];
+  const uniqueSizes = activeProduct ? [...new Set(activeProduct.variants.map(v => v.size).filter(Boolean))] : [];
+
   return (
     <div className="min-h-screen bg-[#F5F5F7] text-neutral-900 font-sans p-4 md:p-8 selection:bg-neutral-900 selection:text-white flex flex-col gap-6">
       
-      {/* HEADER BAR */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto w-full">
         <div>
           <span className="text-xs font-semibold tracking-widest uppercase text-neutral-400 block mb-0.5">
@@ -205,7 +272,6 @@ export default function POS() {
           <h1 className="text-3xl font-bold tracking-tight">Checkout & Billing</h1>
         </div>
 
-        {/* Barcode Search Box */}
         <form onSubmit={handleBarcodeSubmit} className="relative w-full md:w-96">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
           <input
@@ -228,13 +294,10 @@ export default function POS() {
         </form>
       </header>
 
-      {/* MAIN POS VIEWPORT */}
       <div className="max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-6 flex-1 items-start">
         
         {/* LEFT: PRODUCT CATALOG GRID */}
         <div className="flex-1 w-full space-y-4">
-          
-          {/* Category Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
             {categories.map((cat) => {
               const active = selectedCategory === cat;
@@ -252,7 +315,6 @@ export default function POS() {
             })}
           </div>
 
-          {/* Catalog Grid */}
           {fetchingProducts ? (
             <div className="h-96 bg-white/40 rounded-3xl border border-black/5 flex items-center justify-center text-neutral-400 gap-2">
               <Loader2 className="animate-spin" size={20} />
@@ -267,7 +329,10 @@ export default function POS() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
               {filteredProducts.map((p) => {
+                // If it has variants, we consider it generally in stock if any variant has stock, 
+                // or just rely on the top-level quantity fallback for UI display
                 const stock = p.quantity ?? p.stock ?? 0;
+                const hasVariants = p.variants && p.variants.length > 0;
                 const price = p.price ?? p.sellingPrice ?? 0;
                 const imageSrc = getImageUrl(p.imageUrl);
 
@@ -275,16 +340,22 @@ export default function POS() {
                   <motion.div
                     whileTap={{ scale: 0.97 }}
                     key={p._id}
-                    onClick={() => addToCart(p)}
+                    onClick={() => handleProductClick(p)}
                     className={`bg-white/80 hover:bg-white border border-black/5 rounded-2xl p-3 shadow-sm hover:shadow-md cursor-pointer transition-all flex flex-col justify-between relative overflow-hidden group ${
-                      stock <= 0 ? 'opacity-50 pointer-events-none' : ''
+                      !hasVariants && stock <= 0 ? 'opacity-50 pointer-events-none' : ''
                     }`}
                   >
-                    <div className="w-full h-24 bg-neutral-100 rounded-xl mb-2.5 overflow-hidden flex items-center justify-center">
+                    <div className="w-full h-24 bg-neutral-100 rounded-xl mb-2.5 overflow-hidden flex items-center justify-center relative">
                       {imageSrc ? (
                         <img src={imageSrc} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                       ) : (
                         <Package size={24} className="text-neutral-300" />
+                      )}
+                      
+                      {hasVariants && (
+                         <span className="absolute bottom-1.5 right-1.5 bg-black/70 backdrop-blur-md text-white text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <Tag size={9}/> Options
+                         </span>
                       )}
                     </div>
 
@@ -295,9 +366,11 @@ export default function POS() {
 
                     <div className="mt-3 pt-2 border-t border-black/5 flex items-center justify-between">
                       <span className="text-sm font-bold text-neutral-900">₹{price.toFixed(2)}</span>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stock > 5 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {stock} left
-                      </span>
+                      {!hasVariants && (
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stock > 5 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {stock} left
+                        </span>
+                      )}
                     </div>
                   </motion.div>
                 );
@@ -324,7 +397,6 @@ export default function POS() {
             )}
           </div>
 
-          {/* Cart Item List */}
           <div className="max-h-64 overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
             {cart.length === 0 ? (
               <div className="py-12 text-center text-neutral-400 space-y-1">
@@ -342,26 +414,33 @@ export default function POS() {
                       initial={{ opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      key={item._id}
+                      key={item.cartId}
                       className="p-3 bg-white rounded-2xl border border-black/5 flex items-center justify-between shadow-sm"
                     >
                       <div className="flex-1 pr-2">
                         <h4 className="text-xs font-bold text-neutral-900 line-clamp-1">{item.name}</h4>
-                        <span className="text-[10px] text-neutral-400 font-mono">{item.sku} • ₹{price.toFixed(2)}</span>
+                        <span className="text-[10px] text-neutral-400 font-mono block">
+                           {item.sku}
+                        </span>
+                        {item.variantDetails && (
+                           <span className="text-[10px] font-semibold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded block w-max mt-1">
+                              {item.variantDetails.color} | {item.variantDetails.size}
+                           </span>
+                        )}
+                        <span className="text-[11px] font-bold text-neutral-900 mt-1 block">₹{price.toFixed(2)}</span>
                       </div>
 
-                      {/* Quantity Selector */}
                       <div className="flex items-center gap-2">
                         <div className="flex items-center border border-black/10 rounded-xl bg-neutral-50 px-1 py-0.5">
                           <button
-                            onClick={() => updateQuantity(item._id, -1)}
+                            onClick={() => updateQuantity(item.cartId, -1)}
                             className="p-1 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/60 rounded-lg transition-colors"
                           >
                             <Minus size={12} />
                           </button>
                           <span className="w-6 text-center text-xs font-bold text-neutral-900">{item.qty}</span>
                           <button
-                            onClick={() => updateQuantity(item._id, 1)}
+                            onClick={() => updateQuantity(item.cartId, 1)}
                             className="p-1 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/60 rounded-lg transition-colors"
                           >
                             <Plus size={12} />
@@ -369,7 +448,7 @@ export default function POS() {
                         </div>
 
                         <button
-                          onClick={() => removeFromCart(item._id)}
+                          onClick={() => removeFromCart(item.cartId)}
                           className="p-1.5 text-neutral-400 hover:text-rose-500 transition-colors"
                         >
                           <Trash2 size={14} />
@@ -382,7 +461,6 @@ export default function POS() {
             )}
           </div>
 
-          {/* Customer Details & Discount Section */}
           <div className="space-y-2 pt-2 border-t border-black/5">
             <div className="grid grid-cols-2 gap-2">
               <div className="relative">
@@ -408,7 +486,6 @@ export default function POS() {
             </div>
           </div>
 
-          {/* Price Summary Breakdown */}
           <div className="bg-neutral-50 p-4 rounded-2xl border border-black/5 space-y-2 text-xs">
             <div className="flex justify-between text-neutral-500">
               <span>Subtotal</span>
@@ -430,49 +507,24 @@ export default function POS() {
             </div>
           </div>
 
-          {/* Payment Method Selector */}
           <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('Cash')}
-              className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
-                paymentMethod === 'Cash'
-                  ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm'
-                  : 'bg-white border-black/5 text-neutral-600 hover:bg-neutral-50'
-              }`}
-            >
-              <Banknote size={16} />
-              <span className="text-[10px] font-bold">Cash</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('Card')}
-              className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
-                paymentMethod === 'Card'
-                  ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm'
-                  : 'bg-white border-black/5 text-neutral-600 hover:bg-neutral-50'
-              }`}
-            >
-              <CreditCard size={16} />
-              <span className="text-[10px] font-bold">Card</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('UPI')}
-              className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
-                paymentMethod === 'UPI'
-                  ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm'
-                  : 'bg-white border-black/5 text-neutral-600 hover:bg-neutral-50'
-              }`}
-            >
-              <QrCode size={16} />
-              <span className="text-[10px] font-bold">UPI / QR</span>
-            </button>
+            {['Cash', 'Card', 'UPI'].map(method => (
+               <button
+                 key={method}
+                 type="button"
+                 onClick={() => setPaymentMethod(method)}
+                 className={`py-3 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                   paymentMethod === method
+                     ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm'
+                     : 'bg-white border-black/5 text-neutral-600 hover:bg-neutral-50'
+                 }`}
+               >
+                 {method === 'Cash' ? <Banknote size={16} /> : method === 'Card' ? <CreditCard size={16} /> : <QrCode size={16} />}
+                 <span className="text-[10px] font-bold">{method}</span>
+               </button>
+            ))}
           </div>
 
-          {/* Checkout Button */}
           <button
             onClick={handleCheckout}
             disabled={loading || cart.length === 0}
@@ -483,10 +535,122 @@ export default function POS() {
         </div>
       </div>
 
+      {/* VARIANT SELECTION MODAL */}
+      <AnimatePresence>
+         {activeProduct && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+               <motion.div
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 onClick={() => setActiveProduct(null)}
+                 className="absolute inset-0 bg-black/40 backdrop-blur-md"
+               />
+               <motion.div
+                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                 animate={{ opacity: 1, scale: 1, y: 0 }}
+                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                 transition={spring}
+                 className="relative w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl z-10 space-y-6"
+               >
+                  <div className="flex justify-between items-start border-b border-black/5 pb-4">
+                     <div>
+                        <h3 className="text-lg font-bold text-neutral-900">{activeProduct.name}</h3>
+                        <p className="text-xs text-neutral-400 font-mono mt-1">Select Options</p>
+                     </div>
+                     <button onClick={() => setActiveProduct(null)} className="p-1.5 text-neutral-400 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors">
+                        <X size={18} />
+                     </button>
+                  </div>
+
+                  <div className="space-y-5">
+                     {/* Colors */}
+                     {uniqueColors.length > 0 && (
+                        <div>
+                           <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 block mb-2">
+                              Color
+                           </label>
+                           <div className="flex flex-wrap gap-2">
+                              {uniqueColors.map(c => {
+                                 const isSelected = selectedColor === c;
+                                 return (
+                                    <button
+                                       key={c}
+                                       onClick={() => { setSelectedColor(c); setSelectedSize(''); }}
+                                       className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                                          isSelected 
+                                             ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm' 
+                                             : 'bg-white text-neutral-700 border-black/10 hover:border-black/30'
+                                       }`}
+                                    >
+                                       {c}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     )}
+
+                     {/* Sizes */}
+                     {uniqueSizes.length > 0 && (
+                        <div>
+                           <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 block mb-2">
+                              Size
+                           </label>
+                           <div className="flex flex-wrap gap-2">
+                              {uniqueSizes.map(s => {
+                                 const isSelected = selectedSize === s;
+                                 // Check if this size exists & has stock for the selected color
+                                 const variantMatch = activeProduct.variants.find(v => v.color === selectedColor && v.size === s);
+                                 const isAvailable = variantMatch && (variantMatch.quantity > 0 || variantMatch.stock > 0);
+
+                                 return (
+                                    <button
+                                       key={s}
+                                       disabled={!isAvailable}
+                                       onClick={() => setSelectedSize(s)}
+                                       className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                                          isSelected 
+                                             ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm' 
+                                             : isAvailable 
+                                                ? 'bg-white text-neutral-700 border-black/10 hover:border-black/30' 
+                                                : 'bg-neutral-50 text-neutral-300 border-black/5 opacity-50 cursor-not-allowed'
+                                       }`}
+                                    >
+                                       {s}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  <div className="pt-4 border-t border-black/5 flex items-center justify-between">
+                     <span className="text-lg font-bold text-neutral-900">
+                        ₹{(
+                           (activeProduct.variants.find(v => v.color === selectedColor && v.size === selectedSize)?.price) 
+                           || activeProduct.price 
+                           || 0
+                        ).toFixed(2)}
+                     </span>
+                     <button
+                        onClick={addVariantToCart}
+                        disabled={!selectedColor || !selectedSize}
+                        className="px-6 py-3 bg-neutral-900 text-white text-sm font-bold rounded-2xl hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
+                     >
+                        Add to Order
+                     </button>
+                  </div>
+               </motion.div>
+            </div>
+         )}
+      </AnimatePresence>
+
       {/* RECEIPT / INVOICE PRINT MODAL */}
       <AnimatePresence>
         {completedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -510,7 +674,6 @@ export default function POS() {
                 <p className="text-xs text-neutral-400 font-mono">Order ID: {completedOrder.invoiceId}</p>
               </div>
 
-              {/* Printable Invoice Slip Container */}
               <div id="printable-receipt" className="bg-neutral-50 p-4 rounded-2xl border border-black/5 space-y-4 font-mono text-xs">
                 <div className="text-center border-b border-black/5 pb-2">
                   <h4 className="font-bold text-sm">SPORTS STORE</h4>

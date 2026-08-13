@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
-  TrendingUp, AlertCircle, Loader2, PieChart as PieChartIcon, 
-  Calendar, CreditCard, Banknote, QrCode, User, ShoppingBag, Receipt, Search, Filter, X, 
-  MousePointerClick, PlusCircle, ArrowDownRight, ArrowUpRight, Wallet, CheckCircle2 
+  TrendingUp, AlertTriangle, Loader2, Calendar, CreditCard, Banknote, 
+  QrCode, User, Receipt, Search, Filter, X, MousePointerClick, PlusCircle, 
+  ArrowDownRight, ArrowUpRight, Wallet, CheckCircle2, Tag, Layers
 } from 'lucide-react';
 import api from '../utils/api';
 
@@ -16,13 +16,88 @@ const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.08, delayChildren: 0.05 }
+    transition: { staggerChildren: 0.06, delayChildren: 0.04 }
   }
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 16, scale: 0.98 },
+  hidden: { opacity: 0, y: 14, scale: 0.98 },
   show: { opacity: 1, y: 0, scale: 1, transition: springTransition }
+};
+
+// Helper function to extract variant info from item name string e.g. "Shoes (Red, XL)"
+const parseVariantName = (fullName = '') => {
+  const match = fullName.match(/^(.*?)\s*\((.*?)\)$/);
+  if (match) {
+    return { name: match[1].trim(), variantLabel: match[2].trim() };
+  }
+  return { name: fullName, variantLabel: null };
+};
+
+// Map ISO Date to Chart Bucket Label
+const getTransactionLabel = (txDate, currentPeriod) => {
+  if (!txDate) return '';
+  const d = new Date(txDate);
+  if (isNaN(d.getTime())) return '';
+
+  if (currentPeriod === 'weekly') {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[d.getDay()];
+  }
+  if (currentPeriod === 'monthly') {
+    return `Day ${d.getDate()}`;
+  }
+  if (currentPeriod === 'yearly') {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[d.getMonth()];
+  }
+  return '';
+};
+
+// Dynamically generate 100% mathematically synchronized chart data from raw transactions & expenses
+const generateSynchronizedChartData = (transactions = [], expenses = [], timeframe = 'weekly', backendChart = []) => {
+  let labels = [];
+  if (timeframe === 'weekly') {
+    labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  } else if (timeframe === 'monthly') {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    labels = Array.from({ length: daysInMonth }, (_, i) => `Day ${i + 1}`);
+  } else if (timeframe === 'yearly') {
+    labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  }
+
+  const bucketMap = {};
+  labels.forEach((label) => {
+    bucketMap[label] = { label, sales: 0, cashIn: 0, expenses: 0, net: 0 };
+  });
+
+  // Aggregate Sales
+  transactions.forEach((tx) => {
+    const label = getTransactionLabel(tx.date, timeframe);
+    if (bucketMap[label]) {
+      bucketMap[label].sales += Number(tx.total || 0);
+    }
+  });
+
+  // Aggregate Cash In & Expenses
+  expenses.forEach((exp) => {
+    const label = getTransactionLabel(exp.date, timeframe);
+    if (bucketMap[label]) {
+      if (exp.type === 'cash_in') {
+        bucketMap[label].cashIn += Number(exp.amount || 0);
+      } else {
+        bucketMap[label].expenses += Number(exp.amount || 0);
+      }
+    }
+  });
+
+  // Compute Net Balance per bucket
+  return labels.map((label) => {
+    const b = bucketMap[label];
+    b.net = b.sales + b.cashIn - b.expenses;
+    return b;
+  });
 };
 
 export default function Dashboard() {
@@ -32,6 +107,7 @@ export default function Dashboard() {
     totalCashIn: 0,
     netRevenue: 0,
     activeCategories: 0,
+    lowStockCount: 0,
     lowStockWarnings: [],
     chartData: [],
     transactions: [],
@@ -61,16 +137,36 @@ export default function Dashboard() {
     try {
       setLoading(true);
       const response = await api.get(`/dashboard/stats?timeframe=${selectedTimeframe}`);
+      
+      const rawTransactions = response.data.transactions || [];
+      const rawExpenses = response.data.expenses || [];
+      const backendChart = response.data.chartData || [];
+
+      // Generate 100% synchronized chart data matching cards
+      const computedChartData = generateSynchronizedChartData(
+        rawTransactions, 
+        rawExpenses, 
+        selectedTimeframe, 
+        backendChart
+      );
+
+      // Card Totals
+      const calculatedSales = rawTransactions.reduce((sum, t) => sum + Number(t.total || 0), 0);
+      const calculatedCashIn = rawExpenses.filter(e => e.type === 'cash_in').reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const calculatedExpenses = rawExpenses.filter(e => e.type === 'expense').reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const calculatedNet = calculatedSales + calculatedCashIn - calculatedExpenses;
+
       setStats({
-        grossSales: response.data.grossSales || 0,
-        totalExpenses: response.data.totalExpenses || 0,
-        totalCashIn: response.data.totalCashIn || 0,
-        netRevenue: response.data.netRevenue || 0,
+        grossSales: response.data.grossSales ?? calculatedSales,
+        totalExpenses: response.data.totalExpenses ?? calculatedExpenses,
+        totalCashIn: response.data.totalCashIn ?? calculatedCashIn,
+        netRevenue: response.data.netRevenue ?? calculatedNet,
         activeCategories: response.data.activeCategories || 0,
+        lowStockCount: response.data.lowStockCount || response.data.lowStockWarnings?.length || 0,
         lowStockWarnings: response.data.lowStockWarnings || [],
-        chartData: response.data.chartData || [],
-        transactions: response.data.transactions || [],
-        expenses: response.data.expenses || []
+        chartData: computedChartData,
+        transactions: rawTransactions,
+        expenses: rawExpenses
       });
     } catch (error) {
       console.error("Failed to fetch dashboard stats", error);
@@ -92,7 +188,6 @@ export default function Dashboard() {
         date: entryDate
       });
 
-      // Reset Form & Refetch
       setReason('');
       setAmount('');
       setIsModalOpen(false);
@@ -104,38 +199,22 @@ export default function Dashboard() {
     }
   };
 
-  const getTransactionLabel = (txDate, currentPeriod) => {
-    if (!txDate) return '';
-    const d = new Date(txDate);
-    if (isNaN(d.getTime())) return '';
-
-    if (currentPeriod === 'weekly') {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const dayIndex = d.getDay();
-      return days[dayIndex === 0 ? 6 : dayIndex - 1];
-    }
-    if (currentPeriod === 'monthly') {
-      return `Day ${d.getDate()}`;
-    }
-    if (currentPeriod === 'yearly') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return months[d.getMonth()];
-    }
-    return '';
-  };
-
   const handleBarClick = (data) => {
-    if (!data || !data.label) return;
-    setSelectedBar((prev) => (prev === data.label ? null : data.label));
+    if (!data || (!data.activeLabel && !data.label)) return;
+    const clickedLabel = data.activeLabel || data.label;
+    setSelectedBar((prev) => (prev === clickedLabel ? null : clickedLabel));
   };
 
-  // Filter Sales Transactions for Selected Bar
+  // Filter Sales Transactions for Selected Bar & Search Term
   const filteredTransactions = stats.transactions.filter((tx) => {
     const q = searchFilter.toLowerCase();
     const matchesSearch = 
       tx.invoiceNo.toLowerCase().includes(q) ||
       tx.customerName.toLowerCase().includes(q) ||
-      tx.items.some((item) => item.name.toLowerCase().includes(q));
+      tx.items.some((item) => 
+        item.name.toLowerCase().includes(q) || 
+        (item.sku && item.sku.toLowerCase().includes(q))
+      );
 
     const txLabel = getTransactionLabel(tx.date, timeframe);
     const matchesBar = selectedBar ? txLabel === selectedBar : true;
@@ -143,7 +222,7 @@ export default function Dashboard() {
     return matchesSearch && matchesBar;
   });
 
-  // Filter Expenses / Cash-In for Selected Bar
+  // Filter Expenses / Cash-In for Selected Bar & Search Term
   const filteredExpenses = stats.expenses.filter((exp) => {
     const q = searchFilter.toLowerCase();
     const matchesSearch = exp.reason.toLowerCase().includes(q);
@@ -153,7 +232,7 @@ export default function Dashboard() {
     return matchesSearch && matchesBar;
   });
 
-  // Day Summaries
+  // Day Summaries for Audit Ledger
   const selectedDaySales = filteredTransactions.reduce((acc, t) => acc + t.total, 0);
   const selectedDayCashIn = filteredExpenses.filter(e => e.type === 'cash_in').reduce((acc, e) => acc + e.amount, 0);
   const selectedDayExpenses = filteredExpenses.filter(e => e.type === 'expense').reduce((acc, e) => acc + e.amount, 0);
@@ -168,19 +247,60 @@ export default function Dashboard() {
     }
   };
 
+  // Custom Stacked Bar Tooltip
+  const CustomStackedTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const salesVal = payload.find(p => p.dataKey === 'sales')?.value || 0;
+      const cashInVal = payload.find(p => p.dataKey === 'cashIn')?.value || 0;
+      const expVal = payload.find(p => p.dataKey === 'expenses')?.value || 0;
+      const netVal = salesVal + cashInVal - expVal;
+
+      return (
+        <div className="bg-white/95 backdrop-blur-xl p-3.5 rounded-2xl border border-black/[0.08] shadow-2xl text-xs space-y-2 min-w-[180px]">
+          <p className="font-bold text-neutral-900 border-b border-black/[0.05] pb-1.5">{label}</p>
+          <div className="space-y-1 font-mono text-[11px]">
+            <div className="flex justify-between items-center text-zinc-600">
+              <span className="flex items-center gap-1.5 font-sans font-medium text-neutral-600">
+                <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block" /> Gross Sales:
+              </span>
+              <span>₹{salesVal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center text-blue-600">
+              <span className="flex items-center gap-1.5 font-sans font-medium text-neutral-600">
+                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Cash In:
+              </span>
+              <span>₹{cashInVal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center text-rose-600">
+              <span className="flex items-center gap-1.5 font-sans font-medium text-neutral-600">
+                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Expenses:
+              </span>
+              <span>-₹{expVal.toFixed(2)}</span>
+            </div>
+            <div className="border-t border-black/[0.06] pt-1.5 mt-1 flex justify-between items-center font-bold text-neutral-900 text-xs">
+              <span className="font-sans">Net Balance:</span>
+              <span>₹{netVal.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <motion.div 
       initial="hidden"
       animate="show"
       variants={containerVariants}
-      className="flex flex-col gap-8 max-w-7xl mx-auto w-full pb-16 font-sans antialiased text-neutral-900"
+      className="flex flex-col gap-8 max-w-7xl mx-auto w-full pb-16 font-sans antialiased text-neutral-900 select-none"
     >
       
       {/* HEADER BAR & CASH FLOW ACTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Financial Dashboard</h1>
-          <p className="text-xs text-neutral-400 mt-0.5">Real-time revenue telemetry, daily expense logs, and sales ledger</p>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Financial & Inventory Dashboard</h1>
+          <p className="text-xs text-neutral-400 mt-0.5">Real-time revenue telemetry, variant level stock warnings, and transaction audit ledger</p>
         </div>
 
         <motion.button
@@ -194,80 +314,99 @@ export default function Dashboard() {
         </motion.button>
       </div>
 
-      {/* 1. TOP FINANCIAL SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* 1. TOP FINANCIAL & INVENTORY SUMMARY CARDS (5 CARDS) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
-        {/* Net Revenue */}
+        {/* Card 1: Net Balance */}
         <motion.div 
           variants={cardVariants}
           whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-6 rounded-[24px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex items-center gap-4"
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
         >
-          <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-inner">
-            <Wallet size={22} />
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Net Balance</p>
+            <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shadow-inner">
+              <Wallet size={16} />
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Net Balance</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-neutral-900">
-              ₹{stats.netRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </h2>
-          </div>
+          <h2 className="text-xl font-bold tracking-tight text-neutral-900">
+            ₹{stats.netRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h2>
         </motion.div>
 
-        {/* Gross Sales */}
+        {/* Card 2: Gross Sales */}
         <motion.div 
           variants={cardVariants}
           whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-6 rounded-[24px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex items-center gap-4"
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
         >
-          <div className="w-12 h-12 bg-neutral-100/80 rounded-2xl flex items-center justify-center text-neutral-900 shadow-inner">
-            <TrendingUp size={22} />
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Gross Sales</p>
+            <div className="w-8 h-8 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-700 shadow-inner">
+              <TrendingUp size={16} />
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Gross Sales</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-neutral-900">
-              ₹{stats.grossSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </h2>
-          </div>
+          <h2 className="text-xl font-bold tracking-tight text-neutral-900">
+            ₹{stats.grossSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h2>
         </motion.div>
 
-        {/* Total Expenses */}
+        {/* Card 3: Total Cash In */}
         <motion.div 
           variants={cardVariants}
           whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-6 rounded-[24px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex items-center gap-4"
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
         >
-          <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 shadow-inner">
-            <ArrowDownRight size={22} />
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Cash In</p>
+            <div className="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-inner">
+              <ArrowUpRight size={16} />
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Total Expenses</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-rose-600">
-              ₹{stats.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </h2>
-          </div>
+          <h2 className="text-xl font-bold tracking-tight text-blue-600">
+            ₹{stats.totalCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h2>
         </motion.div>
 
-        {/* Total Cash In */}
+        {/* Card 4: Total Expenses */}
         <motion.div 
           variants={cardVariants}
           whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-6 rounded-[24px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex items-center gap-4"
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
         >
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
-            <ArrowUpRight size={22} />
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Expenses</p>
+            <div className="w-8 h-8 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 shadow-inner">
+              <ArrowDownRight size={16} />
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Cash Inflows</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-blue-600">
-              ₹{stats.totalCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </h2>
+          <h2 className="text-xl font-bold tracking-tight text-rose-600">
+            ₹{stats.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h2>
+        </motion.div>
+
+        {/* Card 5: Low Stock Alert Metric */}
+        <motion.div 
+          variants={cardVariants}
+          whileHover={{ y: -3, transition: { duration: 0.2 } }}
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Stock Alerts</p>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-inner ${
+              stats.lowStockCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+            }`}>
+              <AlertTriangle size={16} />
+            </div>
           </div>
+          <h2 className={`text-xl font-bold tracking-tight ${stats.lowStockCount > 0 ? 'text-amber-600' : 'text-neutral-900'}`}>
+            {stats.lowStockCount} <span className="text-xs font-normal text-neutral-400">items</span>
+          </h2>
         </motion.div>
 
       </div>
 
-      {/* 2. REVENUE ANALYTICS CHART */}
+      {/* 2. REVENUE ANALYTICS CHART (SINGLE STACKED BAR) */}
       <motion.div 
         variants={cardVariants}
         className="bg-white/90 backdrop-blur-2xl p-7 rounded-[28px] border border-black/[0.06] shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6"
@@ -275,7 +414,7 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/[0.05] pb-5">
           <div>
             <div className="flex items-center gap-2.5">
-              <h3 className="text-lg font-semibold tracking-tight text-neutral-900">Net Revenue Analytics</h3>
+              <h3 className="text-lg font-semibold tracking-tight text-neutral-900">Net Revenue Breakdown</h3>
               <AnimatePresence>
                 {selectedBar && (
                   <motion.span 
@@ -284,15 +423,28 @@ export default function Dashboard() {
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="bg-black text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm"
                   >
-                    <Filter size={10} /> Active: {selectedBar}
+                    <Filter size={10} /> Active Filter: {selectedBar}
                   </motion.span>
                 )}
               </AnimatePresence>
             </div>
-            <p className="text-xs text-neutral-400 mt-0.5">Click any bar to reveal sales receipts and daily expense logs below</p>
+            <p className="text-xs text-neutral-400 mt-0.5">Stacked view of Gross Sales (Ash), Cash In (Blue), and Expenses (Red)</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
+            {/* Color Legend */}
+            <div className="hidden md:flex items-center gap-3 text-[11px] font-medium text-neutral-600 bg-neutral-100/60 px-3 py-1.5 rounded-full border border-black/[0.04]">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-zinc-500" /> Sales (Ash)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Cash In
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Expenses
+              </span>
+            </div>
+
             <AnimatePresence>
               {selectedBar && (
                 <motion.button
@@ -304,7 +456,7 @@ export default function Dashboard() {
                   onClick={() => setSelectedBar(null)}
                   className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1.5 bg-rose-50/80 px-3.5 py-1.5 rounded-full border border-rose-100 transition-colors shadow-sm"
                 >
-                  <X size={13} /> Reset Filter
+                  <X size={13} /> Reset
                 </motion.button>
               )}
             </AnimatePresence>
@@ -318,14 +470,14 @@ export default function Dashboard() {
               >
                 <option value="weekly">Weekly View</option>
                 <option value="monthly">Monthly View</option>
-                <option value="yearly">Yearly / Annual View</option>
+                <option value="yearly">Yearly View</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Chart Canvas */}
-        <div className="h-[360px] w-full relative">
+        {/* Chart Canvas with Clean Selection (No browser outline ring) */}
+        <div className="h-[360px] w-full relative [&_*]:outline-none [&_.recharts-surface]:outline-none">
           {loading && (
             <div className="absolute inset-0 bg-white/60 backdrop-blur-md flex items-center justify-center text-neutral-400 gap-2 z-10 rounded-2xl">
               <Loader2 className="animate-spin text-neutral-800" size={20} />
@@ -334,7 +486,12 @@ export default function Dashboard() {
           )}
 
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={stats.chartData} margin={{ top: 15, right: 10, left: 10, bottom: 5 }}>
+            <BarChart 
+              data={stats.chartData} 
+              onClick={handleBarClick}
+              accessibilityLayer={false}
+              margin={{ top: 15, right: 10, left: 10, bottom: 5 }}
+            >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F2" />
               <XAxis 
                 dataKey="label" 
@@ -351,48 +508,104 @@ export default function Dashboard() {
                 dx={-10} 
               />
               <Tooltip 
-                cursor={{ fill: 'rgba(0, 0, 0, 0.02)' }}
-                contentStyle={{ 
-                  borderRadius: '18px', 
-                  border: '1px solid rgba(0,0,0,0.06)', 
-                  boxShadow: '0 20px 30px -10px rgba(0,0,0,0.07)',
-                  backgroundColor: '#FFFFFF',
-                  padding: '12px 16px'
-                }}
-                formatter={(value) => [`₹${Number(value).toFixed(2)}`, 'Net Revenue']}
-                labelStyle={{ color: '#171717', fontWeight: 700, marginBottom: '2px', fontSize: '12px' }}
+                cursor={{ fill: 'rgba(0, 0, 0, 0.03)', radius: 12 }}
+                content={<CustomStackedTooltip />}
               />
               
+              {/* Stacked Single Bar Components */}
+              {/* 1. Gross Sales Segment (Ash / Light Charcoal) */}
               <Bar 
-                dataKey="revenue" 
-                onClick={handleBarClick}
-                cursor="pointer"
-                radius={[8, 8, 0, 0]} 
-                maxBarSize={48}
-                animationDuration={1000}
-                animationEasing="ease-out"
-              >
-                {stats.chartData.map((entry, index) => {
-                  const isSelected = selectedBar === entry.label;
-                  let barFill = '#171717';
-                  if (selectedBar) {
-                    barFill = isSelected ? '#000000' : '#E5E5EA';
-                  }
-                  return (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={barFill} 
-                      className="transition-all duration-300 hover:opacity-80" 
-                    />
-                  );
-                })}
-              </Bar>
+                dataKey="sales" 
+                stackId="singleBar" 
+                fill="#71717A" 
+                maxBarSize={44}
+                animationDuration={800}
+                style={{ cursor: 'pointer' }}
+              />
+
+              {/* 2. Cash In Segment (Soft Accent Blue) */}
+              <Bar 
+                dataKey="cashIn" 
+                stackId="singleBar" 
+                fill="#3B82F6" 
+                maxBarSize={44}
+                animationDuration={800}
+                style={{ cursor: 'pointer' }}
+              />
+
+              {/* 3. Expenses Segment (Muted Crimson / Red) */}
+              <Bar 
+                dataKey="expenses" 
+                stackId="singleBar" 
+                fill="#F43F5E" 
+                radius={[6, 6, 0, 0]}
+                maxBarSize={44}
+                animationDuration={800}
+                style={{ cursor: 'pointer' }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </motion.div>
 
-      {/* 3. CONDITIONAL DRILL-DOWN AUDIT (EXPENSES + SALES) */}
+      {/* 3. LOW STOCK & VARIANT WARNINGS PANEL */}
+      {stats.lowStockWarnings && stats.lowStockWarnings.length > 0 && (
+        <motion.div 
+          variants={cardVariants}
+          className="bg-amber-50/50 backdrop-blur-2xl p-6 rounded-[28px] border border-amber-200/60 shadow-sm space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-amber-900">
+              <AlertTriangle size={20} className="text-amber-600" />
+              <h3 className="text-sm font-bold tracking-tight">Low Stock & Variant Inventory Alerts</h3>
+            </div>
+            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/80 px-2.5 py-0.5 rounded-full">
+              {stats.lowStockWarnings.length} Products Require Attention
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {stats.lowStockWarnings.map((item) => {
+              const mainQty = item.quantity ?? item.stock ?? 0;
+              const hasVariants = item.variants && item.variants.length > 0;
+              const lowVariants = hasVariants 
+                ? item.variants.filter(v => (v.quantity ?? v.stock ?? 0) < 10)
+                : [];
+
+              return (
+                <div key={item._id} className="bg-white p-3.5 rounded-2xl border border-amber-100 shadow-sm space-y-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-neutral-400 block uppercase">{item.sku}</span>
+                      <h4 className="text-xs font-bold text-neutral-900 line-clamp-1">{item.name}</h4>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">
+                      {mainQty} left
+                    </span>
+                  </div>
+
+                  {hasVariants && lowVariants.length > 0 && (
+                    <div className="pt-2 border-t border-neutral-100 space-y-1">
+                      <span className="text-[10px] font-semibold text-neutral-400 flex items-center gap-1">
+                        <Layers size={10} /> Low Stock Variants:
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {lowVariants.map((v, idx) => (
+                          <span key={idx} className="text-[10px] bg-rose-50 text-rose-700 border border-rose-100 px-1.5 py-0.5 rounded font-mono">
+                            {v.color || 'Var'} / {v.size || ''}: <strong>{v.quantity ?? v.stock ?? 0}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 4. CONDITIONAL DRILL-DOWN AUDIT LEDGER */}
       <AnimatePresence mode="wait">
         {selectedBar ? (
           <motion.div
@@ -429,7 +642,7 @@ export default function Dashboard() {
                     onClick={() => setActiveTab('all')}
                     className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all ${activeTab === 'all' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}
                   >
-                    All Entries
+                    All
                   </button>
                   <button
                     onClick={() => setActiveTab('sales')}
@@ -455,7 +668,7 @@ export default function Dashboard() {
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
                   <input
                     type="text"
-                    placeholder="Search ledger..."
+                    placeholder="Search invoice, SKU, variant..."
                     value={searchFilter}
                     onChange={(e) => setSearchFilter(e.target.value)}
                     className="w-full pl-9 pr-4 py-1.5 bg-neutral-100/70 border border-black/[0.04] rounded-2xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-black/10 transition-all"
@@ -502,7 +715,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* SALES RECEIPTS TABLE */}
+            {/* SALES RECEIPTS TABLE WITH VARIANT PARSING */}
             {(activeTab === 'all' || activeTab === 'sales') && (
               <div className="space-y-3">
                 {activeTab === 'all' && <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider pt-2">Customer Order Receipts</h4>}
@@ -515,7 +728,7 @@ export default function Dashboard() {
                         <tr className="border-b border-black/[0.05] text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
                           <th className="pb-3 pl-2">Invoice & Time</th>
                           <th className="pb-3">Customer</th>
-                          <th className="pb-3">Items Purchased</th>
+                          <th className="pb-3">Items & Variant Options</th>
                           <th className="pb-3">Payment</th>
                           <th className="pb-3 text-right pr-2">Total Amount</th>
                         </tr>
@@ -542,17 +755,26 @@ export default function Dashboard() {
                               </div>
                             </td>
                             <td className="py-3.5 vertical-align-top">
-                              <div className="space-y-1 max-w-md">
-                                {tx.items.map((item, itemIdx) => (
-                                  <div key={itemIdx} className="flex items-center justify-between text-[11px] bg-neutral-50 px-2.5 py-0.5 rounded-lg border border-black/[0.04]">
-                                    <span className="font-medium text-neutral-800">
-                                      <span className="font-bold text-neutral-900">{item.qty}x</span> {item.name}
-                                    </span>
-                                    <span className="font-mono text-neutral-500 text-[10px]">
-                                      ₹{item.subtotal.toFixed(2)}
-                                    </span>
-                                  </div>
-                                ))}
+                              <div className="space-y-1.5 max-w-md">
+                                {tx.items.map((item, itemIdx) => {
+                                  const { name, variantLabel } = parseVariantName(item.name);
+                                  return (
+                                    <div key={itemIdx} className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] bg-neutral-50 px-2.5 py-1 rounded-xl border border-black/[0.04] gap-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-bold text-neutral-900">{item.qty}x</span>
+                                        <span className="font-medium text-neutral-800">{name}</span>
+                                        {variantLabel && (
+                                          <span className="text-[9px] font-semibold text-neutral-600 bg-neutral-200/60 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                            <Tag size={9} /> {variantLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="font-mono text-neutral-500 text-[10px]">
+                                        ₹{(item.subtotal || (item.price * item.qty)).toFixed(2)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </td>
                             <td className="py-3.5 vertical-align-top">
@@ -591,18 +813,16 @@ export default function Dashboard() {
             </motion.div>
             <div>
               <p className="text-xs font-semibold text-neutral-800">Select a Chart Bar</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">Click any revenue bar in the chart above to expand sales receipts and daily expense entries for that date.</p>
+              <p className="text-[11px] text-neutral-400 mt-0.5">Click any stacked bar in the chart above to inspect detailed order receipts and cash flows.</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 4. APPLE-STYLE EXPENSE & CASH IN ACTION MODAL */}
+      {/* 5. EXPENSE & CASH IN ACTION MODAL */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            
-            {/* Glassmorphic Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -611,7 +831,6 @@ export default function Dashboard() {
               className="absolute inset-0 bg-black/30 backdrop-blur-md"
             />
 
-            {/* Spring Modal Dialog */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -633,7 +852,6 @@ export default function Dashboard() {
               </div>
 
               <form onSubmit={handleAddCashFlow} className="space-y-4">
-                {/* Type Switcher */}
                 <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-100 rounded-2xl border border-black/[0.04]">
                   <button
                     type="button"
@@ -655,7 +873,6 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* Reason Field */}
                 <div>
                   <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1">
                     Entry Reason / Description
@@ -670,7 +887,6 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {/* Amount Field (₹) */}
                 <div>
                   <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1">
                     Amount (₹)
@@ -690,7 +906,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Date Picker */}
                 <div>
                   <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1">
                     Transaction Date
@@ -703,7 +918,6 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {/* Submit Button */}
                 <motion.button
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
