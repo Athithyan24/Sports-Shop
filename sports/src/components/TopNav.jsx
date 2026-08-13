@@ -78,9 +78,7 @@ export default function TopNav({ user, onLogout }) {
         
         {/* Left: Window Controls */}
         <div className="flex items-center gap-2 flex-1">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
-          <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
-          <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
+          <img src='/logo.png' alt="Logo" />
         </div>
         
         {/* Center: Search Bar (Lengthened) */}

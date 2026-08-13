@@ -10,19 +10,24 @@ import {
 } from 'lucide-react';
 import api from '../utils/api';
 
-const springTransition = { type: "spring", stiffness: 350, damping: 28 };
+const springTransition = { type: "spring", stiffness: 260, damping: 26 };
+
+const appleMotion = {
+  ease: [0.22, 1, 0.36, 1],
+  duration: 0.55
+};
 
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.06, delayChildren: 0.04 }
+    transition: { staggerChildren: 0.05, delayChildren: 0.04, ease: appleMotion.ease, duration: appleMotion.duration }
   }
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 14, scale: 0.98 },
-  show: { opacity: 1, y: 0, scale: 1, transition: springTransition }
+  hidden: { opacity: 0, y: 12, scale: 0.985 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { ...springTransition, duration: 0.5 } }
 };
 
 // Helper function to check if ISO Date is Today
@@ -326,28 +331,28 @@ export default function Dashboard() {
       const netVal = salesVal + cashInVal - expVal;
 
       return (
-        <div className="bg-white/95 backdrop-blur-xl p-3.5 rounded-2xl border border-black/[0.08] shadow-2xl text-xs space-y-2 min-w-[180px]">
-          <p className="font-bold text-neutral-900 border-b border-black/[0.05] pb-1.5">{label}</p>
+        <div className="bg-white/95 backdrop-blur-xl p-3.5 rounded-2xl border border-[#e5e5ea] shadow-[0_20px_45px_rgba(15,23,42,0.08)] text-xs space-y-2 min-w-[180px]">
+          <p className="font-bold text-[#1d1d1f] border-b border-[#ececf1] pb-1.5">{label}</p>
           <div className="space-y-1 font-mono text-[11px]">
-            <div className="flex justify-between items-center text-zinc-600">
-              <span className="flex items-center gap-1.5 font-sans font-medium text-neutral-600">
-                <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block" /> Gross Sales:
+            <div className="flex justify-between items-center text-[#4b5563]">
+              <span className="flex items-center gap-1.5 font-sans font-medium text-[#4b5563]">
+                <span className="w-2 h-2 rounded-full bg-[#2c2c2e] inline-block" /> Gross Sales:
               </span>
               <span>₹{salesVal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center text-blue-600">
-              <span className="flex items-center gap-1.5 font-sans font-medium text-neutral-600">
-                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Cash In:
+            <div className="flex justify-between items-center text-[#0071e3]">
+              <span className="flex items-center gap-1.5 font-sans font-medium text-[#4b5563]">
+                <span className="w-2 h-2 rounded-full bg-[#0071e3] inline-block" /> Cash In:
               </span>
               <span>₹{cashInVal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center text-rose-600">
-              <span className="flex items-center gap-1.5 font-sans font-medium text-neutral-600">
-                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Expenses:
+            <div className="flex justify-between items-center text-[#52525b]">
+              <span className="flex items-center gap-1.5 font-sans font-medium text-[#4b5563]">
+                <span className="w-2 h-2 rounded-full bg-[#86868b] inline-block" /> Expenses:
               </span>
               <span>-₹{expVal.toFixed(2)}</span>
             </div>
-            <div className="border-t border-black/[0.06] pt-1.5 mt-1 flex justify-between items-center font-bold text-neutral-900 text-xs">
+            <div className="border-t border-[#ececf1] pt-1.5 mt-1 flex justify-between items-center font-bold text-[#1d1d1f] text-xs">
               <span className="font-sans">Net Balance:</span>
               <span>₹{netVal.toFixed(2)}</span>
             </div>
@@ -363,7 +368,8 @@ export default function Dashboard() {
       initial="hidden"
       animate="show"
       variants={containerVariants}
-      className="flex flex-col gap-6 max-w-7xl mx-auto w-full pb-16 font-sans antialiased text-neutral-900 select-none"
+      transition={{ duration: 0.55, ease: appleMotion.ease }}
+      className="flex flex-col gap-6 max-w-7xl mx-auto w-full pb-16 font-sans antialiased text-[#1d1d1f] select-none"
     >
       
       {/* HEADER BAR WITH ROLE-SPECIFIC ACTION BUTTONS */}
@@ -381,34 +387,35 @@ export default function Dashboard() {
 
         {/* ROLE-BASED ACTION BUTTONS */}
         {isAdmin ? (
-          /* Admin Login: Combined Record Expense / Cash In Button */
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.01, y: -1 }}
+            whileTap={{ scale: 0.99 }}
+            transition={{ duration: 0.2, ease: appleMotion.ease }}
             onClick={() => handleOpenModal('expense')}
-            className="inline-flex items-center gap-2 bg-neutral-900 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-black/10 hover:bg-black transition-all"
+            className="inline-flex items-center gap-2 bg-[#1d1d1f] text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-[0_10px_30px_rgba(29,29,31,0.16)] hover:bg-[#2c2c2e] transition-all"
           >
             <PlusCircle size={16} />
             <span>Record Expense / Cash In</span>
           </motion.button>
         ) : (
-          /* Worker Login: 2 Individual Quick Buttons */
           <div className="flex items-center gap-2.5">
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01, y: -1 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.2, ease: appleMotion.ease }}
               onClick={() => handleOpenModal('expense')}
-              className="inline-flex items-center gap-2 bg-rose-600 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-rose-600/20 hover:bg-rose-700 transition-all"
+              className="inline-flex items-center gap-2 bg-[#f2f2f7] text-[#1d1d1f] text-xs font-semibold px-4 py-2.5 rounded-2xl border border-[#e5e5ea] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:bg-[#e9e9ee] transition-all"
             >
               <ArrowDownRight size={16} />
               <span>Record Expense</span>
             </motion.button>
 
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01, y: -1 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.2, ease: appleMotion.ease }}
               onClick={() => handleOpenModal('cash_in')}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
+              className="inline-flex items-center gap-2 bg-[#f2f2f7] text-[#1d1d1f] text-xs font-semibold px-4 py-2.5 rounded-2xl border border-[#e5e5ea] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:bg-[#e9e9ee] transition-all"
             >
               <ArrowUpRight size={16} />
               <span>Record Cash In</span>
@@ -423,16 +430,16 @@ export default function Dashboard() {
         {/* Card 1: Net Balance */}
         <motion.div 
           variants={cardVariants}
-          whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+          whileHover={{ y: -3, transition: { duration: 0.18, ease: appleMotion.ease } }}
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-[#e5e5ea] shadow-[0_12px_25px_rgba(15,23,42,0.03)] flex flex-col justify-between"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Net Balance</p>
-            <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shadow-inner">
+            <p className="text-[10px] text-[#6e6e73] font-bold uppercase tracking-wider">Net Balance</p>
+            <div className="w-8 h-8 bg-[#f5f5f7] rounded-xl flex items-center justify-center text-[#1d1d1f] shadow-inner border border-[#ececf1]">
               <Wallet size={16} />
             </div>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-neutral-900">
+          <h2 className="text-xl font-bold tracking-tight text-[#1d1d1f]">
             ₹{stats.netRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </h2>
         </motion.div>
@@ -440,16 +447,16 @@ export default function Dashboard() {
         {/* Card 2: Gross Sales */}
         <motion.div 
           variants={cardVariants}
-          whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+          whileHover={{ y: -3, transition: { duration: 0.18, ease: appleMotion.ease } }}
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-[#e5e5ea] shadow-[0_12px_25px_rgba(15,23,42,0.03)] flex flex-col justify-between"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Gross Sales</p>
-            <div className="w-8 h-8 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-700 shadow-inner">
+            <p className="text-[10px] text-[#6e6e73] font-bold uppercase tracking-wider">Gross Sales</p>
+            <div className="w-8 h-8 bg-[#f5f5f7] rounded-xl flex items-center justify-center text-[#1d1d1f] shadow-inner border border-[#ececf1]">
               <TrendingUp size={16} />
             </div>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-neutral-900">
+          <h2 className="text-xl font-bold tracking-tight text-[#1d1d1f]">
             ₹{stats.grossSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </h2>
         </motion.div>
@@ -457,16 +464,16 @@ export default function Dashboard() {
         {/* Card 3: Total Cash In */}
         <motion.div 
           variants={cardVariants}
-          whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+          whileHover={{ y: -3, transition: { duration: 0.18, ease: appleMotion.ease } }}
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-[#e5e5ea] shadow-[0_12px_25px_rgba(15,23,42,0.03)] flex flex-col justify-between"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Cash In</p>
-            <div className="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-inner">
+            <p className="text-[10px] text-[#6e6e73] font-bold uppercase tracking-wider">Cash In</p>
+            <div className="w-8 h-8 bg-[#edf6ff] rounded-xl flex items-center justify-center text-[#0071e3] shadow-inner border border-[#d9ebff]">
               <ArrowUpRight size={16} />
             </div>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-blue-600">
+          <h2 className="text-xl font-bold tracking-tight text-[#0071e3]">
             ₹{stats.totalCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </h2>
         </motion.div>
@@ -474,16 +481,16 @@ export default function Dashboard() {
         {/* Card 4: Total Expenses */}
         <motion.div 
           variants={cardVariants}
-          whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+          whileHover={{ y: -3, transition: { duration: 0.18, ease: appleMotion.ease } }}
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-[#e5e5ea] shadow-[0_12px_25px_rgba(15,23,42,0.03)] flex flex-col justify-between"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Expenses</p>
-            <div className="w-8 h-8 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 shadow-inner">
+            <p className="text-[10px] text-[#6e6e73] font-bold uppercase tracking-wider">Expenses</p>
+            <div className="w-8 h-8 bg-[#f5f5f7] rounded-xl flex items-center justify-center text-[#3a3a3c] shadow-inner border border-[#ececf1]">
               <ArrowDownRight size={16} />
             </div>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-rose-600">
+          <h2 className="text-xl font-bold tracking-tight text-[#3a3a3c]">
             ₹{stats.totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </h2>
         </motion.div>
@@ -491,19 +498,19 @@ export default function Dashboard() {
         {/* Card 5: Low Stock Alert Metric */}
         <motion.div 
           variants={cardVariants}
-          whileHover={{ y: -3, transition: { duration: 0.2 } }}
-          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-black/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+          whileHover={{ y: -3, transition: { duration: 0.18, ease: appleMotion.ease } }}
+          className="bg-white/80 backdrop-blur-2xl p-5 rounded-[22px] border border-[#e5e5ea] shadow-[0_12px_25px_rgba(15,23,42,0.03)] flex flex-col justify-between"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Stock Alerts</p>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-inner ${
-              stats.lowStockCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+            <p className="text-[10px] text-[#6e6e73] font-bold uppercase tracking-wider">Stock Alerts</p>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-inner border ${
+              stats.lowStockCount > 0 ? 'bg-[#f5f5f7] text-[#6e6e73] border-[#e5e5ea]' : 'bg-[#f5f5f7] text-[#1d1d1f] border-[#e5e5ea]'
             }`}>
               <AlertTriangle size={16} />
             </div>
           </div>
-          <h2 className={`text-xl font-bold tracking-tight ${stats.lowStockCount > 0 ? 'text-amber-600' : 'text-neutral-900'}`}>
-            {stats.lowStockCount} <span className="text-xs font-normal text-neutral-400">items</span>
+          <h2 className={`text-xl font-bold tracking-tight ${stats.lowStockCount > 0 ? 'text-[#3a3a3c]' : 'text-[#1d1d1f]'}`}>
+            {stats.lowStockCount} <span className="text-xs font-normal text-[#6e6e73]">items</span>
           </h2>
         </motion.div>
 
@@ -720,14 +727,14 @@ export default function Dashboard() {
       {stats.lowStockWarnings && stats.lowStockWarnings.length > 0 && (
         <motion.div 
           variants={cardVariants}
-          className="bg-amber-50/50 backdrop-blur-2xl p-6 rounded-[28px] border border-amber-200/60 shadow-sm space-y-4"
+className="bg-[#f5f5f7] backdrop-blur-2xl p-6 rounded-[28px] border border-[#e5e5ea] shadow-[0_10px_24px_rgba(15,23,42,0.03)] space-y-4"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 text-amber-900">
-              <AlertTriangle size={20} className="text-amber-600" />
+            <div className="flex items-center gap-2.5 text-[#1d1d1f]">
+              <AlertTriangle size={20} className="text-[#6e6e73]" />
               <h3 className="text-sm font-bold tracking-tight">Low Stock & Variant Inventory Alerts</h3>
             </div>
-            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/80 px-2.5 py-0.5 rounded-full">
+            <span className="text-[11px] font-semibold text-[#4b5563] bg-white/80 px-2.5 py-0.5 rounded-full border border-[#e5e5ea]">
               {stats.lowStockWarnings.length} Products Require Attention
             </span>
           </div>
@@ -741,25 +748,25 @@ export default function Dashboard() {
                 : [];
 
               return (
-                <div key={item._id} className="bg-white p-3.5 rounded-2xl border border-amber-100 shadow-sm space-y-2">
+                <div key={item._id} className="bg-white p-3.5 rounded-2xl border border-[#e5e5ea] shadow-[0_8px_18px_rgba(15,23,42,0.02)] space-y-2">
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-[10px] font-mono font-bold text-neutral-400 block uppercase">{item.sku}</span>
-                      <h4 className="text-xs font-bold text-neutral-900 line-clamp-1">{item.name}</h4>
+                      <span className="text-[10px] font-mono font-bold text-[#6e6e73] block uppercase">{item.sku}</span>
+                      <h4 className="text-xs font-bold text-[#1d1d1f] line-clamp-1">{item.name}</h4>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">
+                    <span className="text-[10px] font-bold text-[#4b5563] bg-[#f5f5f7] px-2 py-0.5 rounded-md border border-[#e5e5ea]">
                       {mainQty} left
                     </span>
                   </div>
 
                   {hasVariants && lowVariants.length > 0 && (
-                    <div className="pt-2 border-t border-neutral-100 space-y-1">
-                      <span className="text-[10px] font-semibold text-neutral-400 flex items-center gap-1">
+                    <div className="pt-2 border-t border-[#ececf1] space-y-1">
+                      <span className="text-[10px] font-semibold text-[#6e6e73] flex items-center gap-1">
                         <Layers size={10} /> Low Stock Variants:
                       </span>
                       <div className="flex flex-wrap gap-1">
                         {lowVariants.map((v, idx) => (
-                          <span key={idx} className="text-[10px] bg-rose-50 text-rose-700 border border-rose-100 px-1.5 py-0.5 rounded font-mono">
+                          <span key={idx} className="text-[10px] bg-[#f5f5f7] text-[#3a3a3c] border border-[#e5e5ea] px-1.5 py-0.5 rounded font-mono">
                             {v.color || 'Var'} / {v.size || ''}: <strong>{v.quantity ?? v.stock ?? 0}</strong>
                           </span>
                         ))}
